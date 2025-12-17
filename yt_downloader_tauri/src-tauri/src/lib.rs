@@ -4,11 +4,9 @@
 //! This module provides Tauri command handlers for the frontend.
 
 mod downloader;
-mod updater;
 mod settings;
 
 use downloader::{fetch_video_info, get_download_dir, VideoInfo, DownloadProgress};
-use updater::{check_and_update, ensure_ytdlp};
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -43,8 +41,8 @@ impl<T> CommandResponse<T> {
 
 /// Fetch video information from URL
 #[tauri::command]
-async fn get_video_info(url: String) -> CommandResponse<VideoInfo> {
-    match fetch_video_info(&url).await {
+async fn get_video_info(app: AppHandle, url: String) -> CommandResponse<VideoInfo> {
+    match fetch_video_info(&app, &url).await {
         Ok(info) => CommandResponse::ok(info),
         Err(e) => CommandResponse::err(e),
     }
@@ -58,11 +56,6 @@ async fn start_download(
     output_path: Option<String>,
     filename_template: Option<String>,
 ) -> CommandResponse<String> {
-    // Ensure yt-dlp is available
-    if let Err(e) = ensure_ytdlp().await {
-        return CommandResponse::err(format!("yt-dlp not available: {}", e));
-    }
-
     let output_dir = output_path
         .map(PathBuf::from)
         .unwrap_or_else(get_download_dir);
@@ -72,8 +65,9 @@ async fn start_download(
 
     let app_handle = Arc::new(app);
     let app_for_callback = Arc::clone(&app_handle);
+    let app_for_download = Arc::clone(&app_handle);
 
-    match downloader::download_video(&url, output_dir, &template, move |progress| {
+    match downloader::download_video(&app_for_download, &url, output_dir, &template, move |progress| {
         let _ = app_for_callback.emit("download-progress", progress);
     }).await {
         Ok(msg) => CommandResponse::ok(msg),
@@ -102,24 +96,6 @@ fn save_settings(settings: AppSettings) -> CommandResponse<()> {
     }
 }
 
-/// Update yt-dlp to the latest version
-#[tauri::command]
-async fn update_ytdlp() -> CommandResponse<String> {
-    match check_and_update().await {
-        Ok(msg) => CommandResponse::ok(msg),
-        Err(e) => CommandResponse::err(e),
-    }
-}
-
-/// Check if yt-dlp is installed
-#[tauri::command]
-async fn check_ytdlp() -> CommandResponse<bool> {
-    match ensure_ytdlp().await {
-        Ok(_) => CommandResponse::ok(true),
-        Err(e) => CommandResponse::err(e),
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -133,20 +109,7 @@ pub fn run() {
             get_default_download_path,
             get_settings,
             save_settings,
-            update_ytdlp,
-            check_ytdlp,
         ])
-        .setup(|app| {
-            // Auto-update yt-dlp on startup (background)
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match check_and_update().await {
-                    Ok(msg) => println!("yt-dlp: {}", msg),
-                    Err(e) => eprintln!("yt-dlp update error: {}", e),
-                }
-            });
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

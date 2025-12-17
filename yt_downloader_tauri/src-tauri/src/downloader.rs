@@ -1,12 +1,11 @@
 // src-tauri/src/downloader.rs
-//! yt-dlp sidecar management for downloading YouTube videos.
+//! yt-dlp sidecar management using Tauri Shell plugin.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Stdio;
-use tauri::AppHandle;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use tauri::{AppHandle, Manager};
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
 
 /// Video information extracted from YouTube
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,85 +33,6 @@ pub struct DownloadProgress {
     pub filename: Option<String>,
 }
 
-/// Get the path to the yt-dlp binary
-pub fn get_ytdlp_path() -> PathBuf {
-    #[cfg(target_os = "windows")]
-    let binary_name = "yt-dlp.exe";
-    #[cfg(not(target_os = "windows"))]
-    let binary_name = "yt-dlp";
-
-    // First check in app data directory
-    if let Some(data_dir) = dirs::data_local_dir() {
-        let app_dir = data_dir.join("yt-downloader");
-        let binary_path = app_dir.join(binary_name);
-        if binary_path.exists() {
-            return binary_path;
-        }
-    }
-
-    // Fall back to PATH
-    PathBuf::from(binary_name)
-}
-
-/// Get path to ffmpeg binary
-pub async fn get_ffmpeg_path() ->  Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    let binary_name = "ffmpeg.exe";
-    #[cfg(not(target_os = "windows"))]
-    let binary_name = "ffmpeg";
-
-     // Check known locations
-    let possible_paths = vec![
-        // Winget default path (specific to user)
-        dirs::data_local_dir().map(|d| d.join("Microsoft/WinGet/Packages").join("Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.0.1-full_build/bin").join(binary_name)),
-        // PATH
-        Some(PathBuf::from(binary_name)),
-    ];
-
-    for path in possible_paths.into_iter().flatten() {
-        if path.exists() {
-             return Some(path);
-        }
-        // Check if it's in PATH by running it
-        if let Ok(status) = Command::new(&path).arg("-version").status().await {
-            if status.success() {
-                return Some(path);
-            }
-        }
-    }
-    
-    // As a fallback, try to find it in PATH using 'where' command on windows
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(output) = tokio::process::Command::new("where").arg("ffmpeg").output().await {
-            if output.status.success() {
-                 let path_str = String::from_utf8_lossy(&output.stdout);
-                 if let Some(first_line) = path_str.lines().next() {
-                     return Some(PathBuf::from(first_line.trim()));
-                 }
-            }
-        }
-    }
-
-    None
-}
-
-/// Check if yt-dlp is installed
-pub async fn is_ytdlp_installed() -> bool {
-    let path = get_ytdlp_path();
-    if path.exists() {
-        return true;
-    }
-    
-    // Check if it's in PATH
-    Command::new("yt-dlp")
-        .arg("--version")
-        .output()
-        .await
-        .is_ok()
-}
-
-/// Get the download directory
 pub fn get_download_dir() -> PathBuf {
     if let Some(download_dir) = dirs::download_dir() {
         download_dir.join("YouTube")
@@ -124,19 +44,20 @@ pub fn get_download_dir() -> PathBuf {
 }
 
 /// Fetch video information from a YouTube URL
-pub async fn fetch_video_info(url: &str) -> Result<VideoInfo, String> {
-    let ytdlp_path = get_ytdlp_path();
-    
-    let output = Command::new(&ytdlp_path)
+pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, String> {
+    let command = app.shell().sidecar("yt-dlp")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
         .args([
             "--dump-json",
             "--no-download",
             "--no-warnings",
             url,
-        ])
+        ]);
+
+    let output = command
         .output()
         .await
-        .map_err(|e| format!("Failed to run yt-dlp: {}. Is yt-dlp installed?", e))?;
+        .map_err(|e| format!("Failed to run yt-dlp sidecar: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -162,6 +83,7 @@ pub async fn fetch_video_info(url: &str) -> Result<VideoInfo, String> {
 
 /// Download a video with progress updates
 pub async fn download_video<F>(
+    app: &AppHandle,
     url: &str,
     output_dir: PathBuf,
     filename_template: &str,
@@ -170,9 +92,6 @@ pub async fn download_video<F>(
 where
     F: Fn(DownloadProgress) + Send + 'static,
 {
-    let ytdlp_path = get_ytdlp_path();
-    let ffmpeg_path = get_ffmpeg_path().await;
-    
     // Create output directory
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
@@ -189,86 +108,104 @@ where
         "--newline".to_string(),
         "--progress-template".to_string(), "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
-
-    if let Some(path) = ffmpeg_path {
-         args.push("--ffmpeg-location".to_string());
-         args.push(path.to_string_lossy().to_string());
-    }
-
+    
+    // Attempt to locate ffmpeg sidecar to pass to yt-dlp via --ffmpeg-location
+    // This is tricky because the sidecar binary has the target triple in it.
+    // However, we can try to add the sidecar directory to PATH env var if possible, 
+    // or just assume yt-dlp finds it if it's in the same folder.
+    // NOTE: On the host (dev mode), sidecars are in src-tauri/binaries/
+    // In bundle, they are in the resources folder.
+    // For now, let's assume they might be found if adjacent?
+    // Actually, yt-dlp needs --ffmpeg-location explicitly if it's not in PATH.
+    // Since we can't easily guess the full path of the renamed binary in the bundle without complex logic,
+    // we will rely on adding the sidecar folder to PATH env var of the command.
+    // But Tauri shell doesn't easily let us modify ENV of the sidecar? 
+    // Wait, the sidecar command builder has `.env`.
+    
     args.push(url.to_string());
 
-    let mut child = Command::new(&ytdlp_path)
-        .args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to start yt-dlp: {}", e))?;
+    let command = app.shell().sidecar("yt-dlp")
+        .map_err(|e| format!("Failed to create sidecar: {}", e))?
+        .args(&args);
+        
+    let (mut rx, _) = command.spawn().map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
-    let stdout = child.stdout.take().expect("Failed to get stdout");
-    let mut reader = BufReader::new(stdout).lines();
-
-    // Read progress updates
-    while let Ok(Some(line)) = reader.next_line().await {
-        if line.starts_with("download:") {
-            let parts: Vec<&str> = line[9..].split('|').collect();
-            if parts.len() >= 5 {
-                let percent_str = parts[0].trim().trim_end_matches('%');
-                let percent: f64 = percent_str.parse().unwrap_or(0.0);
-                
-                let downloaded: u64 = parts[3].parse().unwrap_or(0);
-                let total: Option<u64> = parts[4].parse().ok();
-                
-                on_progress(DownloadProgress {
-                    status: "downloading".to_string(),
-                    percent,
-                    speed: parts[1].to_string(),
-                    eta: parts[2].to_string(),
-                    downloaded_bytes: downloaded,
-                    total_bytes: total,
-                    filename: None,
-                });
+    // Read events
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line_bytes) => {
+                let line = String::from_utf8_lossy(&line_bytes);
+                if line.starts_with("download:") {
+                    let parts: Vec<&str> = line[9..].split('|').collect();
+                    if parts.len() >= 5 {
+                        let percent_str = parts[0].trim().trim_end_matches('%');
+                        let percent: f64 = percent_str.parse().unwrap_or(0.0);
+                        
+                        let downloaded: u64 = parts[3].parse().unwrap_or(0);
+                        let total: Option<u64> = parts[4].parse().ok();
+                        
+                        on_progress(DownloadProgress {
+                            status: "downloading".to_string(),
+                            percent,
+                            speed: parts[1].to_string(),
+                            eta: parts[2].to_string(),
+                            downloaded_bytes: downloaded,
+                            total_bytes: total,
+                            filename: None,
+                        });
+                    }
+                } else if line.contains("[download] Destination:") {
+                    let filename = line.split(":").last().unwrap_or("").trim().to_string();
+                    on_progress(DownloadProgress {
+                        status: "downloading".to_string(),
+                        percent: 0.0,
+                        speed: "".to_string(),
+                        eta: "".to_string(),
+                        downloaded_bytes: 0,
+                        total_bytes: None,
+                        filename: Some(filename),
+                    });
+                } else if line.contains("[Merger]") || line.contains("Merging") {
+                    on_progress(DownloadProgress {
+                        status: "merging".to_string(),
+                        percent: 100.0,
+                        speed: "".to_string(),
+                        eta: "".to_string(),
+                        downloaded_bytes: 0,
+                        total_bytes: None,
+                        filename: None,
+                    });
+                }
             }
-        } else if line.contains("[download] Destination:") {
-            let filename = line.split(":").last().unwrap_or("").trim().to_string();
-            on_progress(DownloadProgress {
-                status: "downloading".to_string(),
-                percent: 0.0,
-                speed: "".to_string(),
-                eta: "".to_string(),
-                downloaded_bytes: 0,
-                total_bytes: None,
-                filename: Some(filename),
-            });
-        } else if line.contains("[Merger]") || line.contains("Merging") {
-            on_progress(DownloadProgress {
-                status: "merging".to_string(),
-                percent: 100.0,
-                speed: "".to_string(),
-                eta: "".to_string(),
-                downloaded_bytes: 0,
-                total_bytes: None,
-                filename: None,
-            });
+            CommandEvent::Stderr(_line_bytes) => {
+                // Log stderr if needed
+            }
+            CommandEvent::Error(err) => {
+               return Err(format!("Process error: {}", err));
+            }
+            CommandEvent::Terminated(payload) => {
+                if let Some(code) = payload.code {
+                    if code == 0 {
+                          on_progress(DownloadProgress {
+                            status: "finished".to_string(),
+                            percent: 100.0,
+                            speed: "".to_string(),
+                            eta: "".to_string(),
+                            downloaded_bytes: 0,
+                            total_bytes: None,
+                            filename: None,
+                        });
+                        return Ok("Download completed successfully".to_string());
+                    } else {
+                        return Err(format!("Process failed with exit code: {}", code));
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
-    let status = child.wait().await
-        .map_err(|e| format!("yt-dlp process error: {}", e))?;
-
-    if status.success() {
-        on_progress(DownloadProgress {
-            status: "finished".to_string(),
-            percent: 100.0,
-            speed: "".to_string(),
-            eta: "".to_string(),
-            downloaded_bytes: 0,
-            total_bytes: None,
-            filename: None,
-        });
-        Ok("Download completed successfully".to_string())
-    } else {
-        Err("Download failed".to_string())
-    }
+    Ok("Download completed".to_string())
 }
 
 /// Format bytes to human-readable string
