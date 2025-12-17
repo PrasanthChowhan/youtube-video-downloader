@@ -2,7 +2,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, message, ask } from "@tauri-apps/plugin-dialog";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import "./App.css";
 
 // Types matching Rust structs
@@ -95,6 +97,46 @@ function App() {
       if (!outputPath) setOutputPath(settings.download_path);
     } catch (e) {
       setError("Failed to save settings: " + e);
+    }
+  };
+
+  // Check for updates handler
+  const handleCheckUpdates = async () => {
+    try {
+      console.log("Checking for updates...");
+      const update = await check();
+
+      if (update) {
+        console.log(`Update found: ${update.version}`);
+        const shouldUpdate = await ask(
+          `A new version (${update.version}) is available!\n\nRelease Notes:\n${update.body || "No release notes"}\n\nWould you like to update now?`,
+          { title: "Update Available", kind: "info" }
+        );
+
+        if (shouldUpdate) {
+          console.log("Downloading and installing update...");
+          await update.downloadAndInstall();
+
+          const shouldRestart = await ask(
+            "Update installed successfully! Would you like to restart the app now?",
+            { title: "Restart Required", kind: "info" }
+          );
+
+          if (shouldRestart) {
+            await relaunch();
+          }
+        }
+      } else {
+        console.log("No updates available");
+        await message("You are running the latest version!", { title: "No Updates", kind: "info" });
+      }
+    } catch (err) {
+      console.error("Update check failed:", err);
+      // In dev mode, updater may not work - show helpful message
+      await message(
+        `Update check failed: ${err}\n\nNote: Auto-update does not work in development mode.`,
+        { title: "Update Error", kind: "error" }
+      );
     }
   };
 
@@ -238,6 +280,7 @@ function App() {
         </div>
 
         <div className="settings-footer">
+          <button className="btn-secondary" onClick={handleCheckUpdates}>🔄 Check for Updates</button>
           <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>
           <button className="btn-primary" onClick={handleSaveSettings}>Save Settings</button>
         </div>

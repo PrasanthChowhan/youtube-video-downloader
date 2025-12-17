@@ -39,5 +39,13 @@
       "binaries/yt-dlp",
       "binaries/ffmpeg"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/PrasanthChowhan/youtube-video-downloader/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk1OEJDMEI0MzA4QzM4QzEKUldUQk9Jd3d0TUNMbGRDR0VnRmo4SkJCekkwNUJMQWM5blhKMDFMc05nOUc2TytPVURNWC91M0IK"
+    }
   }
 }
