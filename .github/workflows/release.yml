@@ -1,0 +1,97 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+            target: "aarch64-apple-darwin"
+          - platform: "macos-13" # Intel Mac
+            args: "--target x86_64-apple-darwin"
+            target: "x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+            target: "x86_64-unknown-linux-gnu"
+          - platform: "windows-latest"
+            args: ""
+            target: "x86_64-pc-windows-msvc"
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: install frontend dependencies
+        run: npm install
+        working-directory: ./yt_downloader_tauri
+
+      # Setup Sidecars (yt-dlp)
+      - name: download yt-dlp sidecars
+        run: node scripts/setup-sidecars.js
+        working-directory: ./yt_downloader_tauri
+
+      # Setup FFmpeg (Manual steps for CI)
+      - name: Setup FFmpeg (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          $Url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          $Dest = "ffmpeg.zip"
+          Invoke-WebRequest -Uri $Url -OutFile $Dest
+          Expand-Archive $Dest -DestinationPath extracted
+          $Source = (Get-ChildItem -Path "extracted\*\bin\ffmpeg.exe").FullName
+          Copy-Item $Source "yt_downloader_tauri/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"
+        shell: powershell
+
+      - name: Setup FFmpeg (macOS)
+        if: contains(matrix.platform, 'macos')
+        run: |
+          wget "https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip" -O ffmpeg.zip
+          unzip ffmpeg.zip
+          mv ffmpeg yt_downloader_tauri/src-tauri/binaries/ffmpeg-${{ matrix.target }}
+          chmod +x yt_downloader_tauri/src-tauri/binaries/ffmpeg-${{ matrix.target }}
+
+      - name: Setup FFmpeg (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          wget "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+          tar -xf ffmpeg-release-amd64-static.tar.xz
+          mv ffmpeg-*-static/ffmpeg yt_downloader_tauri/src-tauri/binaries/ffmpeg-x86_64-unknown-linux-gnu
+          chmod +x yt_downloader_tauri/src-tauri/binaries/ffmpeg-x86_64-unknown-linux-gnu
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
+          releaseName: 'App v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
+          projectPath: ./yt_downloader_tauri
+          args: ${{ matrix.args }}
