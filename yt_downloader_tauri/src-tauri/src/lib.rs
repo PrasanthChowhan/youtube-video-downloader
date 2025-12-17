@@ -5,9 +5,11 @@
 
 mod downloader;
 mod updater;
+mod settings;
 
 use downloader::{fetch_video_info, get_download_dir, VideoInfo, DownloadProgress};
 use updater::{check_and_update, ensure_ytdlp};
+use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -54,6 +56,7 @@ async fn start_download(
     app: AppHandle,
     url: String,
     output_path: Option<String>,
+    filename_template: Option<String>,
 ) -> CommandResponse<String> {
     // Ensure yt-dlp is available
     if let Err(e) = ensure_ytdlp().await {
@@ -63,11 +66,14 @@ async fn start_download(
     let output_dir = output_path
         .map(PathBuf::from)
         .unwrap_or_else(get_download_dir);
+    
+    // Default template if not provided
+    let template = filename_template.unwrap_or_else(|| "%(uploader)s/%(title)s.%(ext)s".to_string());
 
     let app_handle = Arc::new(app);
     let app_for_callback = Arc::clone(&app_handle);
 
-    match downloader::download_video(&url, output_dir, move |progress| {
+    match downloader::download_video(&url, output_dir, &template, move |progress| {
         let _ = app_for_callback.emit("download-progress", progress);
     }).await {
         Ok(msg) => CommandResponse::ok(msg),
@@ -79,6 +85,21 @@ async fn start_download(
 #[tauri::command]
 fn get_default_download_path() -> String {
     get_download_dir().to_string_lossy().to_string()
+}
+
+/// Load application settings
+#[tauri::command]
+fn get_settings() -> CommandResponse<AppSettings> {
+    CommandResponse::ok(load_settings())
+}
+
+/// Save application settings
+#[tauri::command]
+fn save_settings(settings: AppSettings) -> CommandResponse<()> {
+    match save_settings_to_file(&settings) {
+        Ok(_) => CommandResponse::ok(()),
+        Err(e) => CommandResponse::err(e),
+    }
 }
 
 /// Update yt-dlp to the latest version
@@ -110,6 +131,8 @@ pub fn run() {
             get_video_info,
             start_download,
             get_default_download_path,
+            get_settings,
+            save_settings,
             update_ytdlp,
             check_ytdlp,
         ])

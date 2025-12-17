@@ -54,6 +54,49 @@ pub fn get_ytdlp_path() -> PathBuf {
     PathBuf::from(binary_name)
 }
 
+/// Get path to ffmpeg binary
+pub async fn get_ffmpeg_path() ->  Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    let binary_name = "ffmpeg.exe";
+    #[cfg(not(target_os = "windows"))]
+    let binary_name = "ffmpeg";
+
+     // Check known locations
+    let possible_paths = vec![
+        // Winget default path (specific to user)
+        dirs::data_local_dir().map(|d| d.join("Microsoft/WinGet/Packages").join("Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-8.0.1-full_build/bin").join(binary_name)),
+        // PATH
+        Some(PathBuf::from(binary_name)),
+    ];
+
+    for path in possible_paths.into_iter().flatten() {
+        if path.exists() {
+             return Some(path);
+        }
+        // Check if it's in PATH by running it
+        if let Ok(status) = Command::new(&path).arg("-version").status().await {
+            if status.success() {
+                return Some(path);
+            }
+        }
+    }
+    
+    // As a fallback, try to find it in PATH using 'where' command on windows
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = tokio::process::Command::new("where").arg("ffmpeg").output().await {
+            if output.status.success() {
+                 let path_str = String::from_utf8_lossy(&output.stdout);
+                 if let Some(first_line) = path_str.lines().next() {
+                     return Some(PathBuf::from(first_line.trim()));
+                 }
+            }
+        }
+    }
+
+    None
+}
+
 /// Check if yt-dlp is installed
 pub async fn is_ytdlp_installed() -> bool {
     let path = get_ytdlp_path();
@@ -121,32 +164,41 @@ pub async fn fetch_video_info(url: &str) -> Result<VideoInfo, String> {
 pub async fn download_video<F>(
     url: &str,
     output_dir: PathBuf,
+    filename_template: &str,
     on_progress: F,
 ) -> Result<String, String>
 where
     F: Fn(DownloadProgress) + Send + 'static,
 {
     let ytdlp_path = get_ytdlp_path();
+    let ffmpeg_path = get_ffmpeg_path().await;
     
     // Create output directory
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
     let output_template = output_dir
-        .join("%(uploader)s")
-        .join("%(title)s.%(ext)s")
+        .join(filename_template)
         .to_string_lossy()
         .to_string();
 
+    let mut args = vec![
+        "-f".to_string(), "bestvideo[height<=2160]+bestaudio/best".to_string(),
+        "--merge-output-format".to_string(), "mp4".to_string(),
+        "-o".to_string(), output_template,
+        "--newline".to_string(),
+        "--progress-template".to_string(), "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
+    ];
+
+    if let Some(path) = ffmpeg_path {
+         args.push("--ffmpeg-location".to_string());
+         args.push(path.to_string_lossy().to_string());
+    }
+
+    args.push(url.to_string());
+
     let mut child = Command::new(&ytdlp_path)
-        .args([
-            "-f", "bestvideo[height<=2160]+bestaudio/best",
-            "--merge-output-format", "mp4",
-            "-o", &output_template,
-            "--newline",
-            "--progress-template", "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s",
-            url,
-        ])
+        .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

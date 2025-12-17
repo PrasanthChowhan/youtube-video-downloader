@@ -34,6 +34,12 @@ interface CommandResponse<T> {
   error: string | null;
 }
 
+interface AppSettings {
+  download_path: string;
+  filename_template: string;
+  theme: string;
+}
+
 function App() {
   const [url, setUrl] = useState("");
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -45,10 +51,26 @@ function App() {
   const [status, setStatus] = useState("Ready");
   const [showDisclaimer, setShowDisclaimer] = useState(true);
 
+  // Settings State
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>({
+    download_path: "",
+    filename_template: "%(uploader)s/%(title)s.%(ext)s",
+    theme: "dark"
+  });
+
   // Initialize app
   useEffect(() => {
-    // Get default download path
-    invoke<string>("get_default_download_path").then(setOutputPath);
+    // Load settings
+    invoke<CommandResponse<AppSettings>>("get_settings").then((res) => {
+      if (res.success && res.data) {
+        setSettings(res.data);
+        setOutputPath(res.data.download_path);
+      } else {
+        // Fallback default
+        invoke<string>("get_default_download_path").then(setOutputPath);
+      }
+    });
 
     // Listen for download progress events
     const unlisten = listen<DownloadProgress>("download-progress", (event) => {
@@ -63,6 +85,18 @@ function App() {
       unlisten.then((fn) => fn());
     };
   }, []);
+
+  const handleSaveSettings = async () => {
+    try {
+      await invoke("save_settings", { settings });
+      setShowSettings(false);
+
+      // Update local overrides if they match defaults
+      if (!outputPath) setOutputPath(settings.download_path);
+    } catch (e) {
+      setError("Failed to save settings: " + e);
+    }
+  };
 
   const handlePaste = useCallback(async () => {
     try {
@@ -106,11 +140,23 @@ function App() {
     const selected = await open({
       directory: true,
       title: "Select Download Folder",
+      defaultPath: outputPath || undefined,
     });
     if (selected) {
       setOutputPath(selected as string);
     }
-  }, []);
+  }, [outputPath]);
+
+  const handleSettingsBrowse = useCallback(async () => {
+    const selected = await open({
+      directory: true,
+      title: "Select Default Download Folder",
+      defaultPath: settings.download_path || undefined,
+    });
+    if (selected) {
+      setSettings(s => ({ ...s, download_path: selected as string }));
+    }
+  }, [settings.download_path]);
 
   const handleDownload = useCallback(async () => {
     if (!url.trim()) {
@@ -124,9 +170,12 @@ function App() {
     setStatus("Starting download...");
 
     try {
+      // Use current output path (which defaults to settings value)
+      // Use settings.filename_template
       const response = await invoke<CommandResponse<string>>("start_download", {
         url,
-        outputPath: outputPath || null,
+        outputPath: outputPath || settings.download_path,
+        filenameTemplate: settings.filename_template,
       });
 
       if (!response.success) {
@@ -139,7 +188,7 @@ function App() {
       setStatus("Error");
       setIsDownloading(false);
     }
-  }, [url, outputPath]);
+  }, [url, outputPath, settings]);
 
   const formatBytes = (bytes: number): string => {
     const units = ["B", "KB", "MB", "GB"];
@@ -151,6 +200,50 @@ function App() {
     }
     return `${size.toFixed(1)} ${units[unitIndex]}`;
   };
+
+  // Settings Modal
+  const SettingsModal = () => (
+    <div className="disclaimer-overlay">
+      <div className="settings-modal" onClick={e => e.stopPropagation()}>
+        <div className="settings-header">
+          <h2>⚙️ Settings</h2>
+          <button className="btn-close" onClick={() => setShowSettings(false)}>✕</button>
+        </div>
+
+        <div className="settings-content">
+          <div className="setting-group">
+            <label>Default Download Folder</label>
+            <div className="input-row">
+              <input
+                value={settings.download_path}
+                onChange={e => setSettings({ ...settings, download_path: e.target.value })}
+                className="path-input"
+              />
+              <button onClick={handleSettingsBrowse} className="btn-secondary">📁</button>
+            </div>
+          </div>
+
+          <div className="setting-group">
+            <label>Filename Format</label>
+            <select
+              value={settings.filename_template}
+              onChange={e => setSettings({ ...settings, filename_template: e.target.value })}
+              className="settings-select"
+            >
+              <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
+              <option value="%(title)s.%(ext)s">Title Only</option>
+              <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="settings-footer">
+          <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>
+          <button className="btn-primary" onClick={handleSaveSettings}>Save Settings</button>
+        </div>
+      </div>
+    </div>
+  );
 
   // Disclaimer Modal
   if (showDisclaimer) {
@@ -187,11 +280,21 @@ function App() {
 
   return (
     <main className="container">
+      {/* Settings Modal */}
+      {showSettings && <SettingsModal />}
+
       {/* Header */}
       <header className="header">
-        <h1>🎬 YT Downloader</h1>
-        <span className="version">v1.0.0</span>
+        <div className="header-left">
+          <h1>🎬 YT Downloader</h1>
+          <span className="version">v1.0.0</span>
+        </div>
+        <button className="btn-icon-small" onClick={() => setShowSettings(true)} title="Settings">
+          ⚙️
+        </button>
       </header>
+
+      {/* URL Input Section */}
 
       {/* URL Input Section */}
       <section className="card">
