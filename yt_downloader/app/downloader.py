@@ -100,16 +100,13 @@ def format_duration(seconds: int) -> str:
     Format duration in seconds to human-readable string.
     
     Args:
-        seconds: Duration in seconds (can be int or float).
+        seconds: Duration in seconds.
         
     Returns:
         Formatted string like "1:23:45" or "23:45".
     """
     if seconds is None or seconds < 0:
         return "Unknown"
-    
-    # Convert to int to handle float values
-    seconds = int(seconds)
     
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
@@ -162,62 +159,6 @@ def validate_youtube_url(url: str) -> bool:
         if re.match(pattern, url.strip()):
             return True
     return False
-
-
-def normalize_youtube_url(url: str) -> str:
-    """
-    Normalize a YouTube URL to a clean format.
-    
-    Extracts the video ID and returns a standard youtube.com/watch URL,
-    removing playlist parameters, tracking info (si=), etc.
-    
-    Args:
-        url: YouTube URL in any supported format.
-        
-    Returns:
-        Normalized URL in format: https://www.youtube.com/watch?v=VIDEO_ID
-        Returns original URL if video ID cannot be extracted.
-    
-    Examples:
-        - https://youtu.be/-2RAq5o5pwc?si=xyz -> https://www.youtube.com/watch?v=-2RAq5o5pwc
-        - https://youtube.com/watch?v=-2RAq5o5pwc&list=RD -> https://www.youtube.com/watch?v=-2RAq5o5pwc
-    """
-    url = url.strip()
-    video_id = None
-    
-    # Pattern 1: youtube.com/watch?v=VIDEO_ID
-    match = re.search(r'youtube\.com/watch\?.*v=([\w-]+)', url)
-    if match:
-        video_id = match.group(1)
-    
-    # Pattern 2: youtu.be/VIDEO_ID
-    if not video_id:
-        match = re.search(r'youtu\.be/([\w-]+)', url)
-        if match:
-            video_id = match.group(1)
-    
-    # Pattern 3: youtube.com/shorts/VIDEO_ID
-    if not video_id:
-        match = re.search(r'youtube\.com/shorts/([\w-]+)', url)
-        if match:
-            video_id = match.group(1)
-    
-    # Pattern 4: youtube.com/embed/VIDEO_ID
-    if not video_id:
-        match = re.search(r'youtube\.com/embed/([\w-]+)', url)
-        if match:
-            video_id = match.group(1)
-    
-    # Pattern 5: youtube.com/v/VIDEO_ID
-    if not video_id:
-        match = re.search(r'youtube\.com/v/([\w-]+)', url)
-        if match:
-            video_id = match.group(1)
-    
-    if video_id:
-        return f"https://www.youtube.com/watch?v={video_id}"
-    
-    return url  # Return original if no ID found
 
 
 def fetch_video_info(url: str) -> VideoInfo:
@@ -383,7 +324,7 @@ def download_video(
     if output_path:
         output_path = Path(output_path)
         output_path.mkdir(parents=True, exist_ok=True)
-        ydl_opts['outtmpl'] = str(output_path / config.get_output_template())
+        ydl_opts['outtmpl'] = str(output_path / config.output_template)
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

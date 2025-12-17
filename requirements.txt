@@ -13,3 +13,6 @@ requests>=2.31.0
 
 # Build standalone executables (optional, for distribution)
 pyinstaller>=6.3.0
+
+# Version comparison for update checks
+packaging>=23.0

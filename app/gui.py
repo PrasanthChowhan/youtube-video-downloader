@@ -19,6 +19,7 @@ import requests
 from . import __app_name__, __version__
 from .config import get_config, AppConfig
 from .settings_manager import save_settings, load_settings
+from .updater import UpdateChecker, UpdateError, ReleaseInfo, format_release_notes
 from .downloader import (
     fetch_video_info,
     download_video,
@@ -29,6 +30,7 @@ from .downloader import (
     NetworkError,
     InvalidURLError,
     validate_youtube_url,
+    normalize_youtube_url,
     format_duration,
     format_size,
 )
@@ -89,18 +91,136 @@ The developers are not responsible for any misuse.
         self.destroy()
 
 
+class UpdateDialog(ctk.CTkToplevel):
+    """Dialog for showing update information and downloading."""
+    
+    def __init__(self, parent: ctk.CTk, release: ReleaseInfo):
+        super().__init__(parent)
+        self.title("🚀 Update Available")
+        self.geometry("500x400")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.release = release
+        self.parent_window = parent
+        self._downloading = False
+        self._create_widgets()
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - self.winfo_width()) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - self.winfo_height()) // 2
+        self.geometry(f"+{x}+{y}")
+    
+    def _create_widgets(self) -> None:
+        # Header
+        ctk.CTkLabel(self, text=f"🎉 Version {self.release.version} Available!",
+            font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10))
+        
+        ctk.CTkLabel(self, text=f"Current: v{__version__} → New: v{self.release.version}",
+            text_color="gray60").pack(pady=(0, 15))
+        
+        # Release notes
+        notes_frame = ctk.CTkFrame(self)
+        notes_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+        ctk.CTkLabel(notes_frame, text="📝 Release Notes:",
+            font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        
+        notes_text = ctk.CTkTextbox(notes_frame, height=150, wrap="word")
+        notes_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        notes_text.insert("1.0", format_release_notes(self.release.body, max_length=800))
+        notes_text.configure(state="disabled")
+        
+        # Progress bar (hidden initially)
+        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.progress_frame.pack(fill="x", padx=20)
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
+        self.progress_bar.set(0)
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text="")
+        
+        # Buttons
+        button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame.pack(fill="x", padx=20, pady=15)
+        
+        ctk.CTkButton(button_frame, text="Later", width=100,
+            fg_color="gray40", hover_color="gray30",
+            command=self.destroy).pack(side="left")
+        
+        self.download_btn = ctk.CTkButton(button_frame, text="⬇️ Download & Install", width=160,
+            command=self._start_download)
+        self.download_btn.pack(side="right")
+        
+        if not self.release.download_url:
+            self.download_btn.configure(state="disabled", text="No download available")
+    
+    def _start_download(self) -> None:
+        if self._downloading:
+            return
+        self._downloading = True
+        self.download_btn.configure(state="disabled", text="⏳ Downloading...")
+        
+        # Show progress bar
+        self.progress_bar.pack(fill="x", pady=(0, 5))
+        self.progress_label.pack()
+        
+        checker = UpdateChecker(__version__)
+        
+        def on_progress(downloaded: int, total: int):
+            if total > 0:
+                pct = downloaded / total
+                self.after(0, lambda: self._update_progress(pct, downloaded, total))
+        
+        def on_complete(path):
+            self.after(0, lambda: self._download_complete(path))
+        
+        def on_error(msg: str):
+            self.after(0, lambda: self._download_error(msg))
+        
+        checker.download_update_async(
+            self.release,
+            progress_callback=on_progress,
+            complete_callback=on_complete,
+            error_callback=on_error
+        )
+    
+    def _update_progress(self, pct: float, downloaded: int, total: int) -> None:
+        self.progress_bar.set(pct)
+        mb_down = downloaded / (1024 * 1024)
+        mb_total = total / (1024 * 1024)
+        self.progress_label.configure(text=f"{mb_down:.1f} / {mb_total:.1f} MB")
+    
+    def _download_complete(self, path) -> None:
+        self._downloading = False
+        self.download_btn.configure(text="✅ Downloaded!")
+        self.progress_bar.set(1)
+        self.progress_label.configure(text=f"Saved to: {path}")
+        
+        # Ask user to run installer
+        if messagebox.askyesno("Install Update", 
+            f"Update downloaded to:\n{path}\n\nWould you like to run the installer now?\nThe application will close."):
+            import subprocess
+            import sys
+            subprocess.Popen([str(path)], shell=True)
+            self.parent_window.destroy()
+    
+    def _download_error(self, msg: str) -> None:
+        self._downloading = False
+        self.download_btn.configure(state="normal", text="⬇️ Retry Download")
+        self.progress_label.configure(text="Download failed")
+        messagebox.showerror("Download Failed", msg)
+
+
 class SettingsDialog(ctk.CTkToplevel):
     """Settings dialog for download preferences."""
     
     def __init__(self, parent: ctk.CTk, config: AppConfig):
         super().__init__(parent)
         self.title("⚙️ Settings")
-        self.geometry("480x380")
+        self.geometry("480x450")  # Increased height for update button
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
         self.config = config
         self.saved = False
+        self.parent_window = parent
         self._create_widgets()
         self.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() - self.winfo_width()) // 2
@@ -138,6 +258,23 @@ class SettingsDialog(ctk.CTkToplevel):
             ctk.CTkRadioButton(folder_frame, text=text, 
                 variable=self.folder_var, value=value).pack(anchor="w", padx=25, pady=3)
         
+        # Updates Section
+        update_frame = ctk.CTkFrame(self)
+        update_frame.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(update_frame, text="🔄 Updates",
+            font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
+        
+        update_btn_frame = ctk.CTkFrame(update_frame, fg_color="transparent")
+        update_btn_frame.pack(fill="x", padx=15, pady=(0, 10))
+        
+        self.update_btn = ctk.CTkButton(update_btn_frame, text="🔍 Check for Updates",
+            command=self._check_for_updates)
+        self.update_btn.pack(side="left")
+        
+        self.update_status = ctk.CTkLabel(update_btn_frame, text=f"Current: v{__version__}",
+            text_color="gray60")
+        self.update_status.pack(side="right")
+        
         # Buttons
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
         button_frame.pack(fill="x", padx=20, pady=20)
@@ -162,6 +299,38 @@ class SettingsDialog(ctk.CTkToplevel):
             self.destroy()
         else:
             messagebox.showerror("Error", "Failed to save settings")
+    
+    def _check_for_updates(self) -> None:
+        """Check GitHub for updates."""
+        self.update_btn.configure(state="disabled", text="⏳ Checking...")
+        self.update_status.configure(text="Checking...")
+        
+        def check():
+            try:
+                checker = UpdateChecker(__version__)
+                release = checker.check_for_updates()
+                self.after(0, lambda: self._on_check_complete(release))
+            except UpdateError as e:
+                self.after(0, lambda: self._on_check_error(str(e)))
+            except Exception as e:
+                self.after(0, lambda: self._on_check_error(str(e)))
+        
+        threading.Thread(target=check, daemon=True).start()
+    
+    def _on_check_complete(self, release: Optional[ReleaseInfo]) -> None:
+        self.update_btn.configure(state="normal", text="🔍 Check for Updates")
+        if release:
+            self.update_status.configure(text=f"New: v{release.version} available!", text_color="#4CAF50")
+            # Show update dialog
+            self.grab_release()
+            UpdateDialog(self.parent_window, release)
+        else:
+            self.update_status.configure(text="✅ You're up to date!", text_color="#4CAF50")
+    
+    def _on_check_error(self, msg: str) -> None:
+        self.update_btn.configure(state="normal", text="🔍 Check for Updates")
+        self.update_status.configure(text="❌ Check failed", text_color="#F44336")
+        messagebox.showerror("Update Check Failed", msg)
 
 
 class YouTubeDownloaderApp(ctk.CTk):
@@ -278,8 +447,11 @@ class YouTubeDownloaderApp(ctk.CTk):
     
     def _paste_url(self) -> None:
         try:
+            raw_url = self.clipboard_get().strip()
+            # Normalize the URL to remove playlist params, tracking, etc.
+            clean_url = normalize_youtube_url(raw_url)
             self.url_entry.delete(0, "end")
-            self.url_entry.insert(0, self.clipboard_get().strip())
+            self.url_entry.insert(0, clean_url)
         except tk.TclError:
             pass
     
@@ -291,6 +463,11 @@ class YouTubeDownloaderApp(ctk.CTk):
         if not validate_youtube_url(url):
             messagebox.showerror("Error", "Invalid YouTube URL")
             return
+        
+        # Normalize URL and update the entry field
+        url = normalize_youtube_url(url)
+        self.url_entry.delete(0, "end")
+        self.url_entry.insert(0, url)
         
         self._set_status("🔍 Fetching video info...")
         self.fetch_btn.configure(state="disabled")
