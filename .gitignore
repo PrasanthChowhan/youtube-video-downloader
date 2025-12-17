@@ -1,0 +1,74 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+# Note: PyInstaller uses 'build/' but we keep our scripts in 'build/' folder
+# The PyInstaller build folder is typically created at runtime
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Downloaded videos (don't track user downloads)
+downloads/
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.mov
+*.mp3
+*.m4a
+*.opus
+*.flac
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
