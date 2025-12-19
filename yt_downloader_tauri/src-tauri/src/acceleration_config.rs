@@ -34,7 +34,7 @@ impl Default for AccelerationConfig {
             max_concurrent_fragments: 4, // Safe default
             use_throttle_protection: true,
             min_file_size_mb: 10,
-            use_aria2c: false, // Disabled by default (requires separate installation)
+            use_aria2c: true, // Enabled by default for better speeds
         }
     }
 }

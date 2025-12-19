@@ -15,12 +15,12 @@
   --error: #ff5459;
   --error-bg: rgba(255, 84, 89, 0.15);
   --warning: #e68159;
-  
+
   /* Shadows */
   --shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 12px rgba(0, 0, 0, 0.25);
   --shadow-accent: 0 4px 6px rgba(32, 128, 137, 0.25);
-  
+
   /* Animation */
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -234,9 +234,43 @@ button {
   transform: translateY(0);
 }
 
-button:disabled {
+.input-group button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* URL Validation Indicator */
+.url-validator {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.url-validator.valid {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.url-validator.invalid {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Error Banner */
@@ -352,6 +386,7 @@ button:disabled {
     transform: scale(0.95);
     opacity: 0;
   }
+
   to {
     transform: scale(1);
     opacity: 1;
@@ -532,6 +567,7 @@ button:disabled {
     transform: translateY(200px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -579,21 +615,21 @@ button:disabled {
   .container {
     padding: 16px;
   }
-  
+
   .card {
     padding: 16px;
   }
-  
+
   .video-info .video-details {
     flex-direction: column;
   }
-  
+
   .thumbnail {
     width: 100%;
     height: auto;
     aspect-ratio: 16/9;
   }
-  
+
   .header h1 {
     font-size: 20px;
   }
@@ -653,11 +689,11 @@ button:disabled {
   transition: all 200ms var(--ease-smooth);
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
   background-color: var(--accent);
 }
 
-.toggle-switch input:checked + .toggle-slider:before {
+.toggle-switch input:checked+.toggle-slider:before {
   transform: translateX(24px);
 }
 

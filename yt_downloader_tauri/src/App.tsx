@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -73,6 +73,9 @@ function App() {
     min_file_size_mb: 10,
     use_aria2c: false,
   });
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [lastFetchedUrl, setLastFetchedUrl] = useState("");
 
   // Initialize app
   useEffect(() => {
@@ -131,6 +134,48 @@ function App() {
     }
   }, []);
 
+  // Helper function to check if URL is a valid YouTube URL
+  const isYouTubeUrl = (url: string): boolean => {
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+    return youtubeRegex.test(url);
+  };
+
+  // Auto-fetch video info when a valid YouTube URL is detected
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const trimmedUrl = url.trim();
+
+      if (trimmedUrl && isYouTubeUrl(trimmedUrl) && !isLoading && !isDownloading) {
+        // Only fetch if URL has changed
+        if (trimmedUrl !== lastFetchedUrl) {
+          // Show toast notification for valid URL (only once per URL)
+          setToastMessage("✓ Valid YouTube URL detected!");
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 3000);
+
+          setStatus("Fetching video information...");
+          setLastFetchedUrl(trimmedUrl);
+          handleFetchInfo();
+        }
+      } else if (trimmedUrl && !isYouTubeUrl(trimmedUrl)) {
+        setStatus("Invalid YouTube URL");
+        setVideoInfo(null);
+        setLastFetchedUrl("");
+
+        // Show error toast for invalid URL
+        setToastMessage("✗ Invalid YouTube URL");
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      } else if (!trimmedUrl) {
+        setStatus("");
+        setVideoInfo(null);
+        setLastFetchedUrl("");
+      }
+    }, 500); // Debounce for 500ms to avoid excessive calls while typing
+
+    return () => clearTimeout(timeoutId);
+  }, [url, isLoading, isDownloading, lastFetchedUrl]);
+
   const handleFetchInfo = useCallback(async () => {
     if (!url.trim()) {
       setError("Please enter a YouTube URL");
@@ -169,17 +214,6 @@ function App() {
       setOutputPath(selected as string);
     }
   }, [outputPath]);
-
-  const handleSettingsBrowse = useCallback(async () => {
-    const selected = await open({
-      directory: true,
-      title: "Select Default Download Folder",
-      defaultPath: settings.download_path || undefined,
-    });
-    if (selected) {
-      setSettings(s => ({ ...s, download_path: selected as string }));
-    }
-  }, [settings.download_path]);
 
   const handleDownload = useCallback(async () => {
     if (!url.trim()) {
@@ -221,136 +255,146 @@ function App() {
       size /= 1024;
       unitIndex++;
     }
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
+    return `${size.toFixed(1)} ${units[unitIndex]} `;
   };
 
-  // Settings Modal
-  const SettingsModal = () => (
-    <div className="disclaimer-overlay">
-      <div className="settings-modal" onClick={e => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>⚙️ Settings</h2>
-          <button className="btn-close" onClick={() => setShowSettings(false)}>✕</button>
-        </div>
+  // Settings Modal Component - Memoized to prevent re-renders during downloads
+  const SettingsModal = useMemo(() => {
+    if (!showSettings) return null;
 
-        <div className="settings-content">
-          <div className="setting-group">
-            <label>Default Download Folder</label>
-            <div className="input-row">
-              <input
-                value={settings.download_path}
-                onChange={e => setSettings({ ...settings, download_path: e.target.value })}
-                className="path-input"
-              />
-              <button onClick={handleSettingsBrowse} className="btn-secondary">📁</button>
-            </div>
+    return (
+      <div className="disclaimer-overlay">
+        <div className="settings-modal">
+          <div className="settings-header">
+            <h2>Settings</h2>
+            <button className="btn-close" onClick={() => setShowSettings(false)}>×</button>
           </div>
 
-          <div className="setting-group">
-            <label>Filename Format</label>
-            <select
-              value={settings.filename_template}
-              onChange={e => setSettings({ ...settings, filename_template: e.target.value })}
-              className="settings-select"
-            >
-              <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
-              <option value="%(title)s.%(ext)s">Title Only</option>
-              <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
-            </select>
-          </div>
-
-          <div className="setting-group">
-            <label>⚡ Download Acceleration</label>
-            <div className="acceleration-controls">
-              <div className="toggle-row">
-                <span>Enable Acceleration</span>
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    checked={accelConfig.enabled}
-                    onChange={e => setAccelConfig({ ...accelConfig, enabled: e.target.checked })}
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
+          <div className="settings-content">
+            {/* Download Path */}
+            <div className="setting-group">
+              <label>Download Location</label>
+              <div className="input-row">
+                <input
+                  type="text"
+                  value={outputPath}
+                  onChange={e => setOutputPath(e.target.value)}
+                  className="path-input"
+                />
+                <button className="btn-secondary" onClick={async () => {
+                  const path = await open({ directory: true });
+                  if (path) setOutputPath(path as string);
+                }}>
+                  📁 Browse
+                </button>
               </div>
+            </div>
+            <div className="setting-group">
+              <label>Filename Format</label>
+              <select
+                value={settings.filename_template}
+                onChange={e => setSettings({ ...settings, filename_template: e.target.value })}
+                className="settings-select"
+              >
+                <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
+                <option value="%(title)s.%(ext)s">Title Only</option>
+                <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
+              </select>
+            </div>
 
-              {accelConfig.enabled && (
-                <>
-                  <div className="slider-row">
-                    <label>Concurrent Connections: {accelConfig.max_concurrent_fragments}</label>
+            <div className="setting-group">
+              <label>⚡ Download Acceleration</label>
+              <div className="acceleration-controls">
+                <div className="toggle-row">
+                  <span>Enable Acceleration</span>
+                  <label className="toggle-switch">
                     <input
-                      type="range"
-                      min="1"
-                      max="8"
-                      value={accelConfig.max_concurrent_fragments}
-                      onChange={e => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
-                      className="connection-slider"
+                      type="checkbox"
+                      checked={accelConfig.enabled}
+                      onChange={e => setAccelConfig({ ...accelConfig, enabled: e.target.checked })}
                     />
-                    <div className="slider-labels">
-                      <span>1 (Safe)</span>
-                      <span>8 (Fast)</span>
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                {accelConfig.enabled && (
+                  <>
+                    <div className="slider-row">
+                      <label>Concurrent Connections: {accelConfig.max_concurrent_fragments}</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="8"
+                        value={accelConfig.max_concurrent_fragments}
+                        onChange={e => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
+                        className="connection-slider"
+                      />
+                      <div className="slider-labels">
+                        <span>1 (Safe)</span>
+                        <span>8 (Fast)</span>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="warning-box">
-                    ⚠️ Higher values = faster downloads but increased risk of YouTube rate limiting. Recommended: 3-5
-                  </div>
-
-
-                  <div className="toggle-row">
-                    <span>Throttle Protection</span>
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={accelConfig.use_throttle_protection}
-                        onChange={e => setAccelConfig({ ...accelConfig, use_throttle_protection: e.target.checked })}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-
-                  <div className="toggle-row">
-                    <span>Use aria2c (faster speeds)</span>
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={accelConfig.use_aria2c}
-                        onChange={e => setAccelConfig({ ...accelConfig, use_aria2c: e.target.checked })}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-
-                  {accelConfig.use_aria2c && (
                     <div className="warning-box">
-                      ℹ️ Requires aria2c to be installed separately. Can provide 2-5x speed improvements but may trigger throttling if used aggressively.
+                      ⚠️ Higher values = faster downloads but increased risk of YouTube rate limiting. Recommended: 3-5
                     </div>
-                  )}
 
-                  <div className="slider-row">
-                    <label>Min file size for acceleration: {accelConfig.min_file_size_mb} MB</label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="50"
-                      value={accelConfig.min_file_size_mb}
-                      onChange={e => setAccelConfig({ ...accelConfig, min_file_size_mb: parseInt(e.target.value) })}
-                      className="connection-slider"
-                    />
-                  </div>
-                </>
-              )}
+
+                    <div className="toggle-row">
+                      <span>Throttle Protection</span>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={accelConfig.use_throttle_protection}
+                          onChange={e => setAccelConfig({ ...accelConfig, use_throttle_protection: e.target.checked })}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div className="toggle-row">
+                      <span>Use aria2c (faster speeds)</span>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={accelConfig.use_aria2c}
+                          onChange={e => setAccelConfig({ ...accelConfig, use_aria2c: e.target.checked })}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    {accelConfig.use_aria2c && (
+                      <div className="warning-box">
+                        ℹ️ Requires aria2c to be installed separately. Can provide 2-5x speed improvements but may trigger throttling if used aggressively.
+                      </div>
+                    )}
+
+                    <div className="slider-row">
+                      <label>Min file size for acceleration: {accelConfig.min_file_size_mb} MB</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        value={accelConfig.min_file_size_mb}
+                        onChange={e => setAccelConfig({ ...accelConfig, min_file_size_mb: parseInt(e.target.value) })}
+                        className="connection-slider"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="settings-footer">
-          <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>
-          <button className="btn-primary" onClick={handleSaveSettings}>Save Settings</button>
+          <div className="settings-footer">
+            <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>
+            <button className="btn-primary" onClick={handleSaveSettings}>Save Settings</button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }, [showSettings, outputPath, accelConfig]);
 
   // Disclaimer Modal
   if (showDisclaimer) {
@@ -388,7 +432,7 @@ function App() {
   return (
     <main className="container">
       {/* Settings Modal */}
-      {showSettings && <SettingsModal />}
+      {SettingsModal}
 
       {/* Header */}
       <header className="header">
@@ -416,13 +460,6 @@ function App() {
           />
           <button onClick={handlePaste} className="btn-icon" title="Paste">
             📋
-          </button>
-          <button
-            onClick={handleFetchInfo}
-            disabled={isLoading || isDownloading}
-            className="btn-primary"
-          >
-            {isLoading ? "Loading..." : "🔍 Fetch"}
           </button>
         </div>
       </section>
@@ -492,7 +529,7 @@ function App() {
             <div className="progress-bar">
               <div
                 className="progress-fill"
-                style={{ width: `${Math.min(progress.percent, 100)}%` }}
+                style={{ width: `${Math.min(progress.percent, 100)}% ` }}
               />
             </div>
             <div className="progress-stats">
@@ -509,8 +546,15 @@ function App() {
 
       {/* Status Bar */}
       <footer className="status-bar">
-        {status}
+        {status || "Ready to download"}
       </footer>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className={`toast ${toastMessage.includes('✗') ? 'toast-error' : 'toast-success'} `}>
+          {toastMessage}
+        </div>
+      )}
     </main>
   );
 }
