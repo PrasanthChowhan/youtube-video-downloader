@@ -45,13 +45,17 @@ pub fn get_download_dir() -> PathBuf {
 
 /// Fetch video information from a YouTube URL
 pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, String> {
+    // Clean URL: remove playlist parameters that can cause yt-dlp to hang
+    let cleaned_url = clean_youtube_url(url);
+    
     let command = app.shell().sidecar("yt-dlp")
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?
         .args([
             "--dump-json",
             "--no-download",
             "--no-warnings",
-            url,
+            "--no-playlist", // Ensure we don't process playlists
+            &cleaned_url,
         ]);
 
     let output = command
@@ -360,4 +364,28 @@ fn format_eta(seconds: u64) -> String {
     } else {
         format!("{:02}:{:02}", minutes, secs)
     }
+}
+
+/// Clean YouTube URL by removing playlist and other problematic parameters
+/// This prevents yt-dlp from hanging on playlist URLs
+fn clean_youtube_url(url: &str) -> String {
+    // If it's a YouTube URL with query parameters
+    if url.contains("youtube.com/watch?v=") || url.contains("youtu.be/") {
+        // Extract just the video ID
+        if let Some(v_pos) = url.find("v=") {
+            let after_v = &url[v_pos + 2..];
+            let video_id = after_v.split('&').next().unwrap_or(after_v);
+            // Return clean URL with just the video ID
+            return format!("https://www.youtube.com/watch?v={}", video_id);
+        } else if url.contains("youtu.be/") {
+            // Handle youtu.be short URLs
+            if let Some(id_start) = url.find("youtu.be/") {
+                let after_domain = &url[id_start + 9..];
+                let video_id = after_domain.split('?').next().unwrap_or(after_domain);
+                return format!("https://www.youtube.com/watch?v={}", video_id);
+            }
+        }
+    }
+    // Return original URL if not a YouTube URL or can't parse
+    url.to_string()
 }
