@@ -2,10 +2,12 @@
 //! YouTube Downloader Tauri Application
 //! 
 //! This module provides Tauri command handlers for the frontend.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod downloader;
 mod settings;
 mod acceleration_config;
+mod binary_downloader;
 
 use downloader::{fetch_video_info, get_download_dir, VideoInfo, DownloadProgress};
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
@@ -67,10 +69,16 @@ async fn start_download(
 
     // Load acceleration config
     let accel_config = AccelerationConfig::load();
+    eprintln!("Acceleration config: enabled={}, fragments={}, throttle={}, min_size={}MB", 
+              accel_config.enabled, accel_config.max_concurrent_fragments, 
+              accel_config.use_throttle_protection, accel_config.min_file_size_mb);
     
     // Get video info to determine file size for smart acceleration
     let filesize = match fetch_video_info(&app, &url).await {
-        Ok(info) => info.filesize_approx,
+        Ok(info) => {
+            eprintln!("Video filesize: {:?} bytes", info.filesize_approx);
+            info.filesize_approx
+        },
         Err(_) => None,
     };
     
@@ -81,7 +89,10 @@ async fn start_download(
         1 // No acceleration for small files
     };
     
+    eprintln!("Using {} concurrent fragments for download", concurrent_fragments);
+    
     let use_throttle = accel_config.use_throttle_protection;
+    let use_aria2c = accel_config.use_aria2c;
 
     let app_handle = Arc::new(app);
     let app_for_callback = Arc::clone(&app_handle);
@@ -94,6 +105,7 @@ async fn start_download(
         &template, 
         concurrent_fragments,
         use_throttle,
+        use_aria2c,
         move |progress| {
             let _ = app_for_callback.emit("download-progress", progress);
         }
@@ -132,13 +144,16 @@ fn get_acceleration_config() -> CommandResponse<AccelerationConfig> {
 
 /// Save acceleration configuration
 #[tauri::command]
-fn set_acceleration_config(config: AccelerationConfig) -> CommandResponse<()> {
-    let mut validated_config = config;
-    validated_config.validate();
-    match validated_config.save() {
+async fn set_acceleration_config(config: AccelerationConfig) -> CommandResponse<()> {
+    match config.save() {
         Ok(_) => CommandResponse::ok(()),
         Err(e) => CommandResponse::err(e),
     }
+}
+
+/// Ensure aria2c binary is available (download if missing)
+pub async fn ensure_aria2c_available() -> Result<(), String> {
+    binary_downloader::ensure_aria2c().await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -148,6 +163,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            // Download aria2c in background on first launch
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = ensure_aria2c_available().await {
+                    eprintln!("Failed to ensure aria2c is available: {}", e);
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_video_info,
             start_download,

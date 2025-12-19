@@ -89,6 +89,7 @@ pub async fn download_video<F>(
     filename_template: &str,
     concurrent_fragments: u8,
     use_throttle_protection: bool,
+    use_aria2c: bool,
     on_progress: F,
 ) -> Result<String, String>
 where
@@ -113,8 +114,22 @@ where
         "--progress-template".to_string(), "download:%(progress.percent)s|%(progress.speed)s|%(progress.eta)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
     
-    // Add concurrent fragments for acceleration
-    if concurrent_fragments > 1 {
+    // Add aria2c as external downloader if enabled
+    if use_aria2c {
+        args.push("--external-downloader".to_string());
+        args.push("aria2c".to_string());
+        args.push("--external-downloader-args".to_string());
+        // Conservative aria2c settings to avoid triggering YouTube throttling
+        // -x 4: max 4 connections per server (safer than 16)
+        // -s 4: split into 4 parts
+        // -k 1M: minimum split size 1MB
+        // -c: continue partial downloads
+        args.push("-x 4 -s 4 -k 1M -c".to_string());
+    }
+    
+    // Add concurrent fragments for acceleration (only if not using aria2c)
+    // aria2c handles splitting internally
+    if concurrent_fragments > 1 && !use_aria2c {
         args.push("-N".to_string());
         args.push(concurrent_fragments.to_string());
     }
@@ -125,20 +140,9 @@ where
         args.push("100K".to_string()); // If speed drops below 100KB/s, yt-dlp will detect throttling
     }
     
-    // Attempt to locate ffmpeg sidecar to pass to yt-dlp via --ffmpeg-location
-    // This is tricky because the sidecar binary has the target triple in it.
-    // However, we can try to add the sidecar directory to PATH env var if possible, 
-    // or just assume yt-dlp finds it if it's in the same folder.
-    // NOTE: On the host (dev mode), sidecars are in src-tauri/binaries/
-    // In bundle, they are in the resources folder.
-    // For now, let's assume they might be found if adjacent?
-    // Actually, yt-dlp needs --ffmpeg-location explicitly if it's not in PATH.
-    // Since we can't easily guess the full path of the renamed binary in the bundle without complex logic,
-    // we will rely on adding the sidecar folder to PATH env var of the command.
-    // But Tauri shell doesn't easily let us modify ENV of the sidecar? 
-    // Wait, the sidecar command builder has `.env`.
-    
     args.push(url.to_string());
+
+    eprintln!("yt-dlp args: {:?}", args);
 
     let command = app.shell().sidecar("yt-dlp")
         .map_err(|e| format!("Failed to create sidecar: {}", e))?

@@ -45,6 +45,7 @@ interface AccelerationConfig {
   max_concurrent_fragments: number;
   use_throttle_protection: boolean;
   min_file_size_mb: number;
+  use_aria2c: boolean;
 }
 
 function App() {
@@ -70,6 +71,7 @@ function App() {
     max_concurrent_fragments: 4,
     use_throttle_protection: true,
     min_file_size_mb: 10,
+    use_aria2c: false,
   });
 
   // Initialize app
@@ -294,6 +296,7 @@ function App() {
                     ⚠️ Higher values = faster downloads but increased risk of YouTube rate limiting. Recommended: 3-5
                   </div>
 
+
                   <div className="toggle-row">
                     <span>Throttle Protection</span>
                     <label className="toggle-switch">
@@ -305,6 +308,24 @@ function App() {
                       <span className="toggle-slider"></span>
                     </label>
                   </div>
+
+                  <div className="toggle-row">
+                    <span>Use aria2c (faster speeds)</span>
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={accelConfig.use_aria2c}
+                        onChange={e => setAccelConfig({ ...accelConfig, use_aria2c: e.target.checked })}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  {accelConfig.use_aria2c && (
+                    <div className="warning-box">
+                      ℹ️ Requires aria2c to be installed separately. Can provide 2-5x speed improvements but may trigger throttling if used aggressively.
+                    </div>
+                  )}
 
                   <div className="slider-row">
                     <label>Min file size for acceleration: {accelConfig.min_file_size_mb} MB</label>
