@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 
@@ -103,12 +103,14 @@ where
         .to_string_lossy()
         .to_string();
 
+
     let mut args = vec![
         "-f".to_string(), "bestvideo[height<=2160]+bestaudio/best".to_string(),
         "--merge-output-format".to_string(), "mp4".to_string(),
         "-o".to_string(), output_template,
         "--newline".to_string(),
-        "--progress-template".to_string(), "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
+        // Use simpler progress template without underscore prefixes
+        "--progress-template".to_string(), "download:%(progress.percent)s|%(progress.speed)s|%(progress.eta)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
     
     // Add concurrent fragments for acceleration
@@ -149,27 +151,119 @@ where
         match event {
             CommandEvent::Stdout(line_bytes) => {
                 let line = String::from_utf8_lossy(&line_bytes);
-                if line.starts_with("download:") {
-                    let parts: Vec<&str> = line[9..].split('|').collect();
+                let line_str = line.trim();
+                
+                // Parse progress data - yt-dlp may output with or without "download:" prefix
+                // Format: [download:]percent|speed|eta|downloaded_bytes|total_bytes
+                let progress_data = if line_str.starts_with("download:") {
+                    Some(&line_str[9..])
+                } else if line_str.contains("|") && !line_str.starts_with("[") {
+                    // Likely raw progress data without prefix
+                    Some(line_str)
+                } else {
+                    None
+                };
+                
+                if let Some(data) = progress_data {
+                    let parts: Vec<&str> = data.split('|').collect();
                     if parts.len() >= 5 {
-                        let percent_str = parts[0].trim().trim_end_matches('%');
-                        let percent: f64 = percent_str.parse().unwrap_or(0.0);
-                        
                         let downloaded: u64 = parts[3].parse().unwrap_or(0);
                         let total: Option<u64> = parts[4].parse().ok();
+                        
+                        // Calculate percent from bytes if yt-dlp returns "NA"
+                        let percent_str = parts[0].trim().trim_end_matches('%');
+                        let percent: f64 = if percent_str == "NA" || percent_str == "N/A" {
+                            // Calculate from downloaded/total
+                            if let Some(total_bytes) = total {
+                                if total_bytes > 0 {
+                                    (downloaded as f64 / total_bytes as f64) * 100.0
+                                } else {
+                                    0.0
+                                }
+                            } else {
+                                0.0
+                            }
+                        } else {
+                            percent_str.parse().unwrap_or(0.0)
+                        };
+                        
+                        // Parse speed - might be in bytes/sec, convert to human readable
+                        let speed_str = parts[1].trim();
+                        let speed = if speed_str == "NA" || speed_str == "N/A" {
+                            "".to_string()
+                        } else {
+                            // Try to parse as bytes/sec and convert to readable format
+                            if let Ok(speed_bytes) = speed_str.parse::<f64>() {
+                                format_speed(speed_bytes)
+                            } else {
+                                speed_str.to_string()
+                            }
+                        };
+                        
+                        // Parse ETA - might be in seconds, convert to readable format
+                        let eta_str = parts[2].trim();
+                        let eta = if eta_str == "NA" || eta_str == "N/A" {
+                            "".to_string()
+                        } else {
+                            // Try to parse as seconds and convert to readable format
+                            if let Ok(eta_secs) = eta_str.parse::<u64>() {
+                                format_eta(eta_secs)
+                            } else {
+                                eta_str.to_string()
+                            }
+                        };
                         
                         on_progress(DownloadProgress {
                             status: "downloading".to_string(),
                             percent,
-                            speed: parts[1].to_string(),
-                            eta: parts[2].to_string(),
+                            speed,
+                            eta,
                             downloaded_bytes: downloaded,
                             total_bytes: total,
                             filename: None,
                         });
                     }
-                } else if line.contains("[download] Destination:") {
-                    let filename = line.split(":").last().unwrap_or("").trim().to_string();
+                }
+                // Fallback: Parse standard yt-dlp progress output like "[download] 12.5% of 100.00MiB at 1.23MiB/s ETA 01:23"
+                else if line_str.contains("[download]") && line_str.contains("%") {
+                    // Extract percentage
+                    if let Some(percent_pos) = line_str.find("%") {
+                        if let Some(start) = line_str[..percent_pos].rfind(char::is_whitespace) {
+                            let percent_str = &line_str[start+1..percent_pos];
+                            if let Ok(percent) = percent_str.parse::<f64>() {
+                                // Extract speed if available
+                                let speed = if let Some(at_pos) = line_str.find(" at ") {
+                                    if let Some(speed_end) = line_str[at_pos+4..].find(char::is_whitespace) {
+                                        line_str[at_pos+4..at_pos+4+speed_end].to_string()
+                                    } else {
+                                        "".to_string()
+                                    }
+                                } else {
+                                    "".to_string()
+                                };
+                                
+                                // Extract ETA if available
+                                let eta = if let Some(eta_pos) = line_str.find("ETA ") {
+                                    line_str[eta_pos+4..].trim().to_string()
+                                } else {
+                                    "".to_string()
+                                };
+                                
+                                on_progress(DownloadProgress {
+                                    status: "downloading".to_string(),
+                                    percent,
+                                    speed,
+                                    eta,
+                                    downloaded_bytes: 0,
+                                    total_bytes: None,
+                                    filename: None,
+                                });
+                            }
+                        }
+                    }
+                } 
+                else if line_str.contains("[download] Destination:") {
+                    let filename = line_str.split(":").last().unwrap_or("").trim().to_string();
                     on_progress(DownloadProgress {
                         status: "downloading".to_string(),
                         percent: 0.0,
@@ -179,7 +273,7 @@ where
                         total_bytes: None,
                         filename: Some(filename),
                     });
-                } else if line.contains("[Merger]") || line.contains("Merging") {
+                } else if line_str.contains("[Merger]") || line_str.contains("Merging") {
                     on_progress(DownloadProgress {
                         status: "merging".to_string(),
                         percent: 100.0,
@@ -191,8 +285,9 @@ where
                     });
                 }
             }
-            CommandEvent::Stderr(_line_bytes) => {
-                // Log stderr if needed
+            CommandEvent::Stderr(line_bytes) => {
+                // Silently ignore stderr to reduce noise
+                let _line = String::from_utf8_lossy(&line_bytes);
             }
             CommandEvent::Error(err) => {
                return Err(format!("Process error: {}", err));
@@ -234,4 +329,31 @@ pub fn format_bytes(bytes: u64) -> String {
     }
     
     format!("{:.1} {}", size, UNITS[unit_index])
+}
+
+/// Format speed in bytes/sec to human-readable string
+fn format_speed(bytes_per_sec: f64) -> String {
+    const UNITS: [&str; 6] = ["B/s", "KB/s", "MB/s", "GB/s", "TB/s", "PB/s"];
+    let mut size = bytes_per_sec;
+    let mut unit_index = 0;
+    
+    while size >= 1000.0 && unit_index < UNITS.len() - 1 {
+        size /= 1000.0;
+        unit_index += 1;
+    }
+    
+    format!("{:.2}{}", size, UNITS[unit_index])
+}
+
+/// Format ETA in seconds to MM:SS or HH:MM:SS format
+fn format_eta(seconds: u64) -> String {
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+    
+    if hours > 0 {
+        format!("{:02}:{:02}:{:02}", hours, minutes, secs)
+    } else {
+        format!("{:02}:{:02}", minutes, secs)
+    }
 }
