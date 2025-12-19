@@ -5,13 +5,15 @@
 
 mod downloader;
 mod settings;
+mod acceleration_config;
 
 use downloader::{fetch_video_info, get_download_dir, VideoInfo, DownloadProgress};
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
+use acceleration_config::AccelerationConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 /// Response wrapper for commands
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,13 +65,39 @@ async fn start_download(
     // Default template if not provided
     let template = filename_template.unwrap_or_else(|| "%(uploader)s/%(title)s.%(ext)s".to_string());
 
+    // Load acceleration config
+    let accel_config = AccelerationConfig::load();
+    
+    // Get video info to determine file size for smart acceleration
+    let filesize = match fetch_video_info(&app, &url).await {
+        Ok(info) => info.filesize_approx,
+        Err(_) => None,
+    };
+    
+    // Determine if we should use acceleration based on config and file size
+    let concurrent_fragments = if accel_config.should_accelerate(filesize) {
+        accel_config.get_concurrent_fragments()
+    } else {
+        1 // No acceleration for small files
+    };
+    
+    let use_throttle = accel_config.use_throttle_protection;
+
     let app_handle = Arc::new(app);
     let app_for_callback = Arc::clone(&app_handle);
     let app_for_download = Arc::clone(&app_handle);
 
-    match downloader::download_video(&app_for_download, &url, output_dir, &template, move |progress| {
-        let _ = app_for_callback.emit("download-progress", progress);
-    }).await {
+    match downloader::download_video(
+        &app_for_download, 
+        &url, 
+        output_dir, 
+        &template, 
+        concurrent_fragments,
+        use_throttle,
+        move |progress| {
+            let _ = app_for_callback.emit("download-progress", progress);
+        }
+    ).await {
         Ok(msg) => CommandResponse::ok(msg),
         Err(e) => CommandResponse::err(e),
     }
@@ -96,6 +124,23 @@ fn save_settings(settings: AppSettings) -> CommandResponse<()> {
     }
 }
 
+/// Get acceleration configuration
+#[tauri::command]
+fn get_acceleration_config() -> CommandResponse<AccelerationConfig> {
+    CommandResponse::ok(AccelerationConfig::load())
+}
+
+/// Save acceleration configuration
+#[tauri::command]
+fn set_acceleration_config(config: AccelerationConfig) -> CommandResponse<()> {
+    let mut validated_config = config;
+    validated_config.validate();
+    match validated_config.save() {
+        Ok(_) => CommandResponse::ok(()),
+        Err(e) => CommandResponse::err(e),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -109,6 +154,8 @@ pub fn run() {
             get_default_download_path,
             get_settings,
             save_settings,
+            get_acceleration_config,
+            set_acceleration_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -40,6 +40,13 @@ interface AppSettings {
   theme: string;
 }
 
+interface AccelerationConfig {
+  enabled: boolean;
+  max_concurrent_fragments: number;
+  use_throttle_protection: boolean;
+  min_file_size_mb: number;
+}
+
 function App() {
   const [url, setUrl] = useState("");
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -58,6 +65,12 @@ function App() {
     filename_template: "%(uploader)s/%(title)s.%(ext)s",
     theme: "dark"
   });
+  const [accelConfig, setAccelConfig] = useState<AccelerationConfig>({
+    enabled: true,
+    max_concurrent_fragments: 4,
+    use_throttle_protection: true,
+    min_file_size_mb: 10,
+  });
 
   // Initialize app
   useEffect(() => {
@@ -69,6 +82,13 @@ function App() {
       } else {
         // Fallback default
         invoke<string>("get_default_download_path").then(setOutputPath);
+      }
+    });
+
+    // Load acceleration config
+    invoke<CommandResponse<AccelerationConfig>>("get_acceleration_config").then((res) => {
+      if (res.success && res.data) {
+        setAccelConfig(res.data);
       }
     });
 
@@ -89,6 +109,7 @@ function App() {
   const handleSaveSettings = async () => {
     try {
       await invoke("save_settings", { settings });
+      await invoke("set_acceleration_config", { config: accelConfig });
       setShowSettings(false);
 
       // Update local overrides if they match defaults
@@ -234,6 +255,71 @@ function App() {
               <option value="%(title)s.%(ext)s">Title Only</option>
               <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
             </select>
+          </div>
+
+          <div className="setting-group">
+            <label>⚡ Download Acceleration</label>
+            <div className="acceleration-controls">
+              <div className="toggle-row">
+                <span>Enable Acceleration</span>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={accelConfig.enabled}
+                    onChange={e => setAccelConfig({ ...accelConfig, enabled: e.target.checked })}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              {accelConfig.enabled && (
+                <>
+                  <div className="slider-row">
+                    <label>Concurrent Connections: {accelConfig.max_concurrent_fragments}</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="8"
+                      value={accelConfig.max_concurrent_fragments}
+                      onChange={e => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
+                      className="connection-slider"
+                    />
+                    <div className="slider-labels">
+                      <span>1 (Safe)</span>
+                      <span>8 (Fast)</span>
+                    </div>
+                  </div>
+
+                  <div className="warning-box">
+                    ⚠️ Higher values = faster downloads but increased risk of YouTube rate limiting. Recommended: 3-5
+                  </div>
+
+                  <div className="toggle-row">
+                    <span>Throttle Protection</span>
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={accelConfig.use_throttle_protection}
+                        onChange={e => setAccelConfig({ ...accelConfig, use_throttle_protection: e.target.checked })}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  <div className="slider-row">
+                    <label>Min file size for acceleration: {accelConfig.min_file_size_mb} MB</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="50"
+                      value={accelConfig.min_file_size_mb}
+                      onChange={e => setAccelConfig({ ...accelConfig, min_file_size_mb: parseInt(e.target.value) })}
+                      className="connection-slider"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

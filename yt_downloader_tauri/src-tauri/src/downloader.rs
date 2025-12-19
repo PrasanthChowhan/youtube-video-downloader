@@ -87,6 +87,8 @@ pub async fn download_video<F>(
     url: &str,
     output_dir: PathBuf,
     filename_template: &str,
+    concurrent_fragments: u8,
+    use_throttle_protection: bool,
     on_progress: F,
 ) -> Result<String, String>
 where
@@ -108,6 +110,18 @@ where
         "--newline".to_string(),
         "--progress-template".to_string(), "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
+    
+    // Add concurrent fragments for acceleration
+    if concurrent_fragments > 1 {
+        args.push("-N".to_string());
+        args.push(concurrent_fragments.to_string());
+    }
+    
+    // Add throttle protection if enabled (detects YouTube rate limiting)
+    if use_throttle_protection {
+        args.push("--throttled-rate".to_string());
+        args.push("100K".to_string()); // If speed drops below 100KB/s, yt-dlp will detect throttling
+    }
     
     // Attempt to locate ffmpeg sidecar to pass to yt-dlp via --ffmpeg-location
     // This is tricky because the sidecar binary has the target triple in it.

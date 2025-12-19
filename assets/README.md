@@ -9,9 +9,6 @@ This folder contains application assets such as icons and images.
 ## Creating an Icon
 
 1. Create a 256x256 PNG image
-2. Convert to .ico format using online tools or:
-   ```python
-   from PIL import Image
-   img = Image.open("icon.png")
-   img.save("icon.ico", format="ICO", sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
-   ```
+2. Convert to .ico format using:
+   - **Online tools**: [ConvertICO](https://convertico.com/) or [ICO Convert](https://icoconvert.com/)
+   - **ImageMagick CLI**: `magick convert icon.png -define icon:auto-resize=256,128,64,32,16 icon.ico`
