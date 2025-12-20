@@ -75,6 +75,60 @@ pub async fn download_video<F>(
 where
     F: Fn(DownloadProgress) + Send + 'static,
 {
+    let (mut rx, _child) = download_video_with_child(
+        app,
+        url,
+        output_dir,
+        filename_template,
+        concurrent_fragments,
+        use_throttle_protection,
+        use_aria2c,
+    )
+    .await?;
+
+    use tauri_plugin_shell::process::CommandEvent;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line_bytes) => {
+                let line = String::from_utf8_lossy(&line_bytes);
+                if let Some(progress) = parse_progress_line(&line) {
+                    on_progress(progress);
+                }
+            }
+            CommandEvent::Error(err) => {
+                return Err(format!("Process error: {}", err));
+            }
+            CommandEvent::Terminated(payload) => {
+                if let Some(code) = payload.code {
+                    if code == 0 {
+                        on_progress(DownloadProgress {
+                            status: "finished".to_string(),
+                            percent: 100.0,
+                            ..Default::default()
+                        });
+                        return Ok("Download completed successfully".to_string());
+                    } else {
+                        return Err(format!("Process failed with exit code: {}", code));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok("Download completed".to_string())
+}
+
+/// Downloads a video and returns the receiver and child process for external control.
+pub async fn download_video_with_child(
+    app: &AppHandle,
+    url: &str,
+    output_dir: PathBuf,
+    filename_template: &str,
+    concurrent_fragments: u8,
+    use_throttle_protection: bool,
+    use_aria2c: bool,
+) -> Result<(tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>, tauri_plugin_shell::process::CommandChild), String> {
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
@@ -112,41 +166,13 @@ where
         .map_err(|e| format!("Failed to create sidecar: {}", e))?
         .args(&args);
 
-    let (mut rx, _) = command.spawn().map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+    let (rx, child) = command.spawn().map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(line_bytes) => {
-                let line = String::from_utf8_lossy(&line_bytes);
-                if let Some(progress) = parse_progress(&line) {
-                    on_progress(progress);
-                }
-            }
-            CommandEvent::Error(err) => {
-                return Err(format!("Process error: {}", err));
-            }
-            CommandEvent::Terminated(payload) => {
-                if let Some(code) = payload.code {
-                    if code == 0 {
-                        on_progress(DownloadProgress {
-                            status: "finished".to_string(),
-                            percent: 100.0,
-                            ..Default::default()
-                        });
-                        return Ok("Download completed successfully".to_string());
-                    } else {
-                        return Err(format!("Process failed with exit code: {}", code));
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Ok("Download completed".to_string())
+    Ok((rx, child))
 }
 
-fn parse_progress(line: &str) -> Option<DownloadProgress> {
+/// Parse progress from yt-dlp output line
+pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
     let line = line.trim();
     
     let data = if line.starts_with("download:") {

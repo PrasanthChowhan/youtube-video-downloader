@@ -2,9 +2,12 @@
  * VideoGet - Main App Component
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useSettings, useVideoInfo, useDownload } from "./hooks";
-import { Header, UrlInput, DownloadCard, BottomNav, RecentDownloads } from "./components";
+import { UrlInput, DownloadCard, BottomNav } from "./components";
+import type { AccelerationConfig, CommandResponse } from "./types";
 import "./App.css";
 
 type Tab = "settings" | "youtube" | "downloads";
@@ -13,16 +16,28 @@ function App() {
   const [url, setUrl] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("youtube");
 
+  // Acceleration config state
+  const [accelConfig, setAccelConfig] = useState<AccelerationConfig>({
+    enabled: true,
+    max_concurrent_fragments: 4,
+    use_throttle_protection: true,
+    min_file_size_mb: 10,
+    use_aria2c: true,
+  });
+
   // Hooks
-  const { settings, outputPath, setOutputPath, saveSettings } = useSettings();
-  const { videoInfo, isLoading, error, fetchInfo, clearInfo } = useVideoInfo();
+  const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
+  const { videoInfo, isLoading, error, downloadMode, fetchInfo, clearInfo } = useVideoInfo();
   const { progress, isDownloading, startDownload } = useDownload();
 
-  // Sample recent downloads (will be replaced with actual data)
-  const recentDownloads = [
-    { id: "1", title: "Lofi Hip Hop Radio - Beats to Relax/Study to", type: "audio" as const, size: "45.2 MB", time: "Just now" },
-    { id: "2", title: "Complete Blender 3.0 Tutorial for Beginners", type: "video" as const, size: "1.2 GB", time: "2 hours ago" },
-  ];
+  // Load acceleration config on mount
+  useEffect(() => {
+    invoke<CommandResponse<AccelerationConfig>>("get_acceleration_config").then((res) => {
+      if (res.success && res.data) {
+        setAccelConfig(res.data);
+      }
+    });
+  }, []);
 
   /**
    * Handle download button click
@@ -31,32 +46,56 @@ function App() {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
 
-    // First fetch video info
+    // Fetch video info first
     await fetchInfo(trimmedUrl);
 
-    // Then start download
-    await startDownload(trimmedUrl, outputPath, "youtube", settings.filename_template);
-  }, [url, outputPath, settings.filename_template, fetchInfo, startDownload]);
+    // Start download
+    await startDownload(trimmedUrl, outputPath, downloadMode, settings.filename_template);
+  }, [url, outputPath, downloadMode, settings.filename_template, fetchInfo, startDownload]);
 
   /**
    * Cancel current download
    */
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback(async () => {
+    try {
+      await invoke("cancel_download");
+    } catch (e) {
+      console.error("Failed to cancel download:", e);
+    }
     clearInfo();
   }, [clearInfo]);
 
   /**
-   * Switch tabs
+   * Browse for folder
    */
-  const handleTabChange = useCallback((tab: Tab) => {
-    setActiveTab(tab);
-  }, []);
+  const handleBrowse = useCallback(async () => {
+    const selected = await open({
+      directory: true,
+      title: "Select Download Folder",
+      defaultPath: outputPath || undefined,
+    });
+    if (selected) {
+      setOutputPath(selected as string);
+    }
+  }, [outputPath, setOutputPath]);
+
+  /**
+   * Save acceleration config
+   */
+  const handleSaveAccelConfig = useCallback(async () => {
+    await invoke("set_acceleration_config", { config: accelConfig });
+  }, [accelConfig]);
+
+  /**
+   * Save all settings
+   */
+  const handleSaveAll = useCallback(async () => {
+    await saveSettings();
+    await handleSaveAccelConfig();
+  }, [saveSettings, handleSaveAccelConfig]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* Header */}
-      <Header />
-
+    <div className="flex flex-col h-screen overflow-hidden bg-background-dark">
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto flex flex-col items-center w-full">
         {activeTab === "youtube" && (
@@ -94,14 +133,17 @@ function App() {
                 progress={progress}
                 isDownloading={isDownloading}
                 onCancel={handleCancel}
+                url={url}
               />
             )}
 
-            {/* Recent Downloads */}
-            <RecentDownloads
-              downloads={recentDownloads}
-              onViewAll={() => setActiveTab("downloads")}
-            />
+            {/* Empty state when no downloads */}
+            {!videoInfo && !isDownloading && !error && (
+              <div className="flex-1 flex flex-col items-center justify-center text-[#637588] py-16">
+                <span className="material-symbols-outlined text-6xl mb-4 opacity-30">download</span>
+                <p className="text-sm">Your downloads will appear here</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -112,42 +154,127 @@ function App() {
               <p className="text-[#9dabb9]">Configure download options</p>
             </div>
 
-            <div className="bg-surface-dark rounded-xl p-6 space-y-6">
-              <div>
-                <label className="block text-sm font-medium mb-2">Download Location</label>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={outputPath}
-                    onChange={(e) => setOutputPath(e.target.value)}
-                    className="flex-1 bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="/path/to/downloads"
-                  />
-                  <button className="px-4 py-3 bg-[#111418] border border-[#283039] rounded-lg hover:bg-[#283039] transition-colors">
-                    <span className="material-symbols-outlined">folder_open</span>
-                  </button>
+            {/* General Settings */}
+            <div className="bg-surface-dark rounded-xl p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">folder</span>
+                General
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-[#9dabb9]">Download Location</label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={outputPath}
+                      onChange={(e) => setOutputPath(e.target.value)}
+                      className="flex-1 bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="/path/to/downloads"
+                    />
+                    <button
+                      onClick={handleBrowse}
+                      className="px-4 py-3 bg-[#111418] border border-[#283039] rounded-lg hover:bg-[#283039] transition-colors"
+                    >
+                      <span className="material-symbols-outlined">folder_open</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-[#9dabb9]">Filename Template</label>
+                  <select
+                    value={settings.filename_template}
+                    onChange={(e) => updateSettings({ filename_template: e.target.value })}
+                    className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
+                    <option value="%(title)s.%(ext)s">Title Only</option>
+                    <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
+                  </select>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Filename Template</label>
-                <select
-                  value={settings.filename_template}
-                  className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
-                  <option value="%(title)s.%(ext)s">Title Only</option>
-                  <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
-                </select>
-              </div>
-
-              <button
-                onClick={saveSettings}
-                className="w-full py-3 bg-primary hover:bg-blue-600 rounded-lg font-medium transition-colors"
-              >
-                Save Settings
-              </button>
             </div>
+
+            {/* Download Booster Settings */}
+            <div className="bg-surface-dark rounded-xl p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">bolt</span>
+                Download Booster
+              </h2>
+
+              <div className="space-y-4">
+                {/* Enable toggle */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-sm">Enable Speed Boost</span>
+                  <input
+                    type="checkbox"
+                    checked={accelConfig.enabled}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, enabled: e.target.checked })}
+                    className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                  />
+                </label>
+
+                {/* Use aria2c */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-sm">Use aria2c (faster downloads)</span>
+                  <input
+                    type="checkbox"
+                    checked={accelConfig.use_aria2c}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, use_aria2c: e.target.checked })}
+                    className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                  />
+                </label>
+
+                {/* Concurrent Fragments */}
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-sm text-[#9dabb9]">Concurrent Fragments</label>
+                    <span className="text-sm font-medium">{accelConfig.max_concurrent_fragments}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="16"
+                    value={accelConfig.max_concurrent_fragments}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
+                    className="w-full h-2 bg-[#111418] rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                </div>
+
+                {/* Min File Size */}
+                <div>
+                  <label className="block text-sm text-[#9dabb9] mb-2">Min File Size for Boost (MB)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={accelConfig.min_file_size_mb}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, min_file_size_mb: parseInt(e.target.value) || 10 })}
+                    className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Throttle Protection */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-sm">Throttle Protection (prevents bans)</span>
+                  <input
+                    type="checkbox"
+                    checked={accelConfig.use_throttle_protection}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, use_throttle_protection: e.target.checked })}
+                    className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={handleSaveAll}
+              className="w-full py-3 bg-primary hover:bg-blue-600 rounded-lg font-medium transition-colors"
+            >
+              Save Settings
+            </button>
           </div>
         )}
 
@@ -158,13 +285,17 @@ function App() {
               <p className="text-[#9dabb9]">Your download history</p>
             </div>
 
-            <RecentDownloads downloads={recentDownloads} />
+            {/* Empty state */}
+            <div className="flex-1 flex flex-col items-center justify-center text-[#637588] py-16">
+              <span className="material-symbols-outlined text-6xl mb-4 opacity-30">folder_open</span>
+              <p className="text-sm">No downloads yet</p>
+            </div>
           </div>
         )}
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 }

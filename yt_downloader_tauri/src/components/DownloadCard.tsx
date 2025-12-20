@@ -8,6 +8,29 @@ interface DownloadCardProps {
     progress: DownloadProgress | null;
     isDownloading: boolean;
     onCancel?: () => void;
+    url?: string;
+}
+
+/**
+ * Extract file extension from URL for direct downloads
+ */
+function getFileTypeFromUrl(url: string): string {
+    try {
+        const pathname = new URL(url).pathname;
+        const ext = pathname.split('.').pop()?.toLowerCase();
+        if (ext && ['mp4', 'webm', 'mkv', 'avi', 'mov'].includes(ext)) {
+            return ext.toUpperCase();
+        }
+        if (ext && ['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) {
+            return ext.toUpperCase() + ' Audio';
+        }
+        if (ext && ['iso', 'zip', 'tar', 'gz', '7z', 'rar'].includes(ext)) {
+            return ext.toUpperCase() + ' Archive';
+        }
+    } catch {
+        // Invalid URL
+    }
+    return 'File';
 }
 
 export const DownloadCard: React.FC<DownloadCardProps> = ({
@@ -15,12 +38,19 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
     progress,
     isDownloading,
     onCancel,
+    url = '',
 }) => {
-    if (!videoInfo && !isDownloading) return null;
+    if (!videoInfo && !isDownloading && !progress) return null;
 
     const title = videoInfo?.title || "Preparing download...";
     const thumbnail = videoInfo?.thumbnail;
-    const format = "MP4 • 1080p";
+
+    // Determine format based on source
+    const format = videoInfo
+        ? `MP4 • ${videoInfo.duration_string || 'Video'}`
+        : url
+            ? getFileTypeFromUrl(url)
+            : 'Fetching...';
 
     return (
         <div className="bg-surface-dark rounded-xl p-5 mb-8 shadow-sm border border-[#283039]">
@@ -31,7 +61,9 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
                     style={thumbnail ? { backgroundImage: `url('${thumbnail}')` } : {}}
                 >
                     {!thumbnail && (
-                        <span className="material-symbols-outlined text-[#637588] text-3xl">smart_display</span>
+                        <span className="material-symbols-outlined text-[#637588] text-3xl">
+                            {url.includes('youtube') || url.includes('youtu.be') ? 'smart_display' : 'download'}
+                        </span>
                     )}
                     <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
                 </div>
@@ -42,10 +74,11 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
                             <h3 className="font-medium text-sm leading-tight truncate pr-4">{title}</h3>
                             <p className="text-[#9dabb9] text-xs mt-1">{format}</p>
                         </div>
-                        {onCancel && (
+                        {onCancel && !progress?.status?.includes('finished') && (
                             <button
                                 onClick={onCancel}
-                                className="text-[#9dabb9] hover:text-white transition-colors"
+                                className="text-[#9dabb9] hover:text-red-400 transition-colors"
+                                title="Cancel download"
                             >
                                 <span className="material-symbols-outlined text-[20px]">close</span>
                             </button>
@@ -57,16 +90,17 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
                         <>
                             <div className="relative w-full h-2 bg-[#3b4754] rounded-full overflow-hidden mb-2">
                                 <div
-                                    className="absolute top-0 left-0 h-full bg-primary rounded-full transition-all duration-300"
+                                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-300 ${progress?.status === 'finished' ? 'bg-green-500' : 'bg-primary'
+                                        }`}
                                     style={{ width: `${progress?.percent || 0}%` }}
                                 ></div>
                             </div>
                             <div className="flex justify-between text-xs text-[#9dabb9]">
-                                <span className="font-medium text-primary">
+                                <span className={`font-medium ${progress?.status === 'finished' ? 'text-green-400' : 'text-primary'}`}>
                                     {progress?.status === "finished"
-                                        ? "Complete!"
+                                        ? "✓ Complete!"
                                         : progress?.status === "merging"
-                                            ? "Merging..."
+                                            ? "Merging files..."
                                             : `Downloading... ${progress?.speed || ""}`}
                                 </span>
                                 <span>

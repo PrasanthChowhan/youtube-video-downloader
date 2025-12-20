@@ -16,7 +16,22 @@ use response::CommandResponse;
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_shell::process::CommandChild;
+use std::sync::Mutex;
+
+/// Global state to track active download process
+pub struct DownloadState {
+    pub active_child: Mutex<Option<(CommandChild, u32)>>, // (child, pid)
+}
+
+impl Default for DownloadState {
+    fn default() -> Self {
+        Self {
+            active_child: Mutex::new(None),
+        }
+    }
+}
 
 /// Fetch video information from URL
 #[tauri::command]
@@ -28,10 +43,11 @@ async fn get_video_info(app: AppHandle, url: String) -> CommandResponse<VideoInf
 #[tauri::command]
 async fn start_download(
     app: AppHandle,
+    state: State<'_, DownloadState>,
     url: String,
     output_path: Option<String>,
     filename_template: Option<String>,
-) -> CommandResponse<String> {
+) -> Result<String, String> {
     let output_dir = output_path
         .map(PathBuf::from)
         .unwrap_or_else(get_download_dir);
@@ -55,26 +71,149 @@ async fn start_download(
     let use_throttle = accel_config.use_throttle_protection;
     let use_aria2c = accel_config.use_aria2c;
 
-    let app_handle = Arc::new(app);
-    let app_for_callback = Arc::clone(&app_handle);
-    let app_for_download = Arc::clone(&app_handle);
-
-    match downloader::download_video(
-        &app_for_download,
+    // Spawn the download process
+    let (mut rx, child) = downloader::download_video_with_child(
+        &app,
         &url,
         output_dir,
         &template,
         concurrent_fragments,
         use_throttle,
         use_aria2c,
-        move |progress| {
-            let _ = app_for_callback.emit("download-progress", progress);
-        },
     )
-    .await
+    .await?;
+
+    // Get the PID for process tree killing
+    let pid = child.pid();
+
+    // Store child and PID in state for cancellation
     {
-        Ok(msg) => CommandResponse::ok(msg),
-        Err(e) => CommandResponse::err(e),
+        let mut guard = state.active_child.lock().unwrap();
+        *guard = Some((child, pid));
+    }
+
+    let app_handle = Arc::new(app);
+    
+    // Process events
+    use tauri_plugin_shell::process::CommandEvent;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line_bytes) => {
+                let line = String::from_utf8_lossy(&line_bytes);
+                if let Some(progress) = downloader::parse_progress_line(&line) {
+                    let _ = app_handle.emit("download-progress", progress);
+                }
+            }
+            CommandEvent::Error(err) => {
+                // Clear state
+                let mut guard = state.active_child.lock().unwrap();
+                *guard = None;
+                return Err(format!("Process error: {}", err));
+            }
+            CommandEvent::Terminated(payload) => {
+                // Clear state
+                let mut guard = state.active_child.lock().unwrap();
+                *guard = None;
+
+                if let Some(code) = payload.code {
+                    if code == 0 {
+                        let _ = app_handle.emit(
+                            "download-progress",
+                            DownloadProgress {
+                                status: "finished".to_string(),
+                                percent: 100.0,
+                                ..Default::default()
+                            },
+                        );
+                        return Ok("Download completed successfully".to_string());
+                    } else {
+                        // Check if cancelled
+                        return Err(format!("Download stopped (code: {})", code));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Clear state
+    let mut guard = state.active_child.lock().unwrap();
+    *guard = None;
+    Ok("Download completed".to_string())
+}
+
+/// Cancel the active download - kills entire process tree
+#[tauri::command]
+fn cancel_download(
+    app: AppHandle,
+    state: State<'_, DownloadState>,
+) -> Result<String, String> {
+    let mut guard = state.active_child.lock().unwrap();
+    
+    if let Some((child, pid)) = guard.take() {
+        // First try to kill the process tree using platform-specific methods
+        let tree_killed = kill_process_tree(pid);
+        
+        // Also try the regular kill as backup
+        let _ = child.kill();
+        
+        // Emit cancelled status
+        let _ = app.emit(
+            "download-progress",
+            DownloadProgress {
+                status: "cancelled".to_string(),
+                percent: 0.0,
+                ..Default::default()
+            },
+        );
+        
+        if tree_killed {
+            Ok("Download cancelled".to_string())
+        } else {
+            Ok("Download cancelled (partial)".to_string())
+        }
+    } else {
+        Ok("No active download".to_string())
+    }
+}
+
+/// Kill entire process tree (cross-platform)
+fn kill_process_tree(pid: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        // On Windows, use taskkill with /T flag to kill process tree
+        use std::process::Command;
+        let result = Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .output();
+        match result {
+            Ok(output) => output.status.success(),
+            Err(e) => {
+                eprintln!("Failed to run taskkill: {}", e);
+                false
+            }
+        }
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Unix, send SIGKILL to process group
+        use std::process::Command;
+        // Try to kill the process group
+        let result = Command::new("kill")
+            .args(["-9", &format!("-{}", pid)]) // Negative PID kills process group
+            .output();
+        if result.is_ok() && result.unwrap().status.success() {
+            return true;
+        }
+        // Fallback: just kill the process
+        let result = Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .output();
+        match result {
+            Ok(output) => output.status.success(),
+            Err(_) => false,
+        }
     }
 }
 
@@ -120,6 +259,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(DownloadState::default())
         .setup(|_app| {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = ensure_aria2c_available().await {
@@ -131,6 +271,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_video_info,
             start_download,
+            cancel_download,
             get_default_download_path,
             get_settings,
             save_settings,
