@@ -80,6 +80,7 @@ async fn start_download(
         concurrent_fragments,
         use_throttle,
         use_aria2c,
+        Some(accel_config.aria2_min_split_size),
     )
     .await?;
 

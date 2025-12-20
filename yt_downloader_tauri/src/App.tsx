@@ -23,6 +23,7 @@ function App() {
     use_throttle_protection: true,
     min_file_size_mb: 10,
     use_aria2c: true,
+    aria2_min_split_size: "1M",
   });
 
   // Hooks
@@ -187,6 +188,7 @@ function App() {
                     value={settings.filename_template}
                     onChange={(e) => updateSettings({ filename_template: e.target.value })}
                     className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+
                   >
                     <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
                     <option value="%(title)s.%(ext)s">Title Only</option>
@@ -201,6 +203,32 @@ function App() {
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">bolt</span>
                 Download Booster
+                <div className="relative group flex items-center ml-1">
+                  <span className="material-symbols-outlined text-[#5c6b7f] hover:text-primary transition-colors text-lg cursor-help">info</span>
+
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-4 bg-[#1e2329] border border-[#283039] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out transform translate-y-1 group-hover:translate-y-0 z-50">
+                    <div className="font-bold text-white mb-2 text-sm flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-sm">rocket_launch</span>
+                      Optimization Guide
+                    </div>
+                    <div className="space-y-2 text-xs text-[#9dabb9]">
+                      <div className="flex justify-between">
+                        <span className="text-primary font-medium">Fragments:</span>
+                        <span className="text-right"><b>16</b> (Safe) — <b>32</b> (Fastest)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-primary font-medium">Split Size:</span>
+                        <span className="text-right"><b>1M</b> (Default) — <b>5M</b> (4K+)</span>
+                      </div>
+                      <div className="pt-2 border-t border-[#283039] mt-2 italic text-[#5c6b7f]">
+                        Use 16 connections to avoid YouTube temporary IP bans.
+                      </div>
+                    </div>
+                    {/* Arrow */}
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#283039]"></div>
+                  </div>
+                </div>
               </h2>
 
               <div className="space-y-4">
@@ -235,10 +263,27 @@ function App() {
                   <input
                     type="range"
                     min="1"
-                    max="16"
+                    max="32"
+                    step="1"
                     value={accelConfig.max_concurrent_fragments}
                     onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
                     className="w-full h-2 bg-[#111418] rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex justify-between text-xs text-[#9dabb9] mt-1">
+                    <span>1</span>
+                    <span>32</span>
+                  </div>
+                </div>
+
+                {/* Min Split Size */}
+                <div>
+                  <label className="block text-sm text-[#9dabb9] mb-2">Aria2 Min Split Size (e.g. 1M)</label>
+                  <input
+                    type="text"
+                    value={accelConfig.aria2_min_split_size || "1M"}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, aria2_min_split_size: e.target.value })}
+                    className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="1M"
                   />
                 </div>
 

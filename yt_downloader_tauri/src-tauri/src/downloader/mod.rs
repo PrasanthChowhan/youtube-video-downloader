@@ -70,6 +70,7 @@ pub async fn download_video<F>(
     concurrent_fragments: u8,
     use_throttle_protection: bool,
     use_aria2c: bool,
+    aria2_split_size: Option<String>,
     on_progress: F,
 ) -> Result<String, String>
 where
@@ -83,6 +84,7 @@ where
         concurrent_fragments,
         use_throttle_protection,
         use_aria2c,
+        aria2_split_size,
     )
     .await?;
 
@@ -128,6 +130,7 @@ pub async fn download_video_with_child(
     concurrent_fragments: u8,
     use_throttle_protection: bool,
     use_aria2c: bool,
+    aria2_split_size: Option<String>,
 ) -> Result<(tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>, tauri_plugin_shell::process::CommandChild), String> {
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
@@ -144,13 +147,18 @@ pub async fn download_video_with_child(
     ];
 
     if use_aria2c {
+        // Use high connection count for aria2c speed boost
+        let connections = concurrent_fragments.max(16); // Use at least 16 connections
+        let split_size = aria2_split_size.unwrap_or_else(|| "1M".to_string());
+        let aria_args = format!("-x {} -s {} -k {} -c --file-allocation=none", connections, connections, split_size);
+        eprintln!("[DEBUG] Using aria2c with args: {}", aria_args);
         args.extend([
             "--external-downloader".to_string(), "aria2c".to_string(),
-            "--external-downloader-args".to_string(), "-x 4 -s 4 -k 1M -c".to_string(),
+            "--external-downloader-args".to_string(), aria_args,
         ]);
-    }
-
-    if concurrent_fragments > 1 && !use_aria2c {
+    } else if concurrent_fragments > 1 {
+        // Use yt-dlp's built-in concurrent fragments if not using aria2c
+        eprintln!("[DEBUG] Using yt-dlp -N {} concurrent fragments", concurrent_fragments);
         args.extend(["-N".to_string(), concurrent_fragments.to_string()]);
     }
 

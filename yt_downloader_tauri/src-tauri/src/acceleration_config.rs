@@ -25,6 +25,9 @@ pub struct AccelerationConfig {
     /// Use aria2c as external downloader for better speeds
     /// Requires aria2c to be installed on the system
     pub use_aria2c: bool,
+
+    /// Minimum split size for aria2c (e.g., "1M", "5M", "10M")
+    pub aria2_min_split_size: String,
 }
 
 impl Default for AccelerationConfig {
@@ -35,6 +38,7 @@ impl Default for AccelerationConfig {
             use_throttle_protection: true,
             min_file_size_mb: 10,
             use_aria2c: true, // Enabled by default for better speeds
+            aria2_min_split_size: "1M".to_string(),
         }
     }
 }
@@ -42,12 +46,19 @@ impl Default for AccelerationConfig {
 impl AccelerationConfig {
     /// Validate and clamp configuration values
     pub fn validate(&mut self) {
-        // Clamp concurrent fragments to safe range (1-8)
-        self.max_concurrent_fragments = self.max_concurrent_fragments.clamp(1, 8);
+        // Clamp concurrent fragments (1-32 to allow higher speeds with aria2c)
+        self.max_concurrent_fragments = self.max_concurrent_fragments.clamp(1, 32);
 
         // Ensure min file size is reasonable
         if self.min_file_size_mb == 0 {
             self.min_file_size_mb = 1;
+        }
+
+        // Validate split size format (simple check)
+        if self.aria2_min_split_size.is_empty()
+            || !self.aria2_min_split_size.chars().any(|c| c.is_digit(10))
+        {
+            self.aria2_min_split_size = "1M".to_string();
         }
     }
 

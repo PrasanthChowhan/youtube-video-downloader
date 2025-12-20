@@ -40,6 +40,7 @@ export interface AccelerationConfig {
     use_throttle_protection: boolean;
     min_file_size_mb: number;
     use_aria2c: boolean;
+    aria2_min_split_size: string;
 }
 
 export type DownloadMode = "youtube" | "direct" | null;
