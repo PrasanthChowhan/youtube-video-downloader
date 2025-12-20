@@ -3,7 +3,7 @@
  * Displays a single item in the download queue
  */
 import React from "react";
-import { QueueItem as QueueItemType } from "../types";
+import { ManagerQueueItem as QueueItemType } from "../types";
 
 interface QueueItemProps {
     item: QueueItemType;
@@ -22,10 +22,10 @@ const formatBytes = (bytes: number | null): string => {
 
 const getStatusBadge = (status: string) => {
     switch (status) {
-        case "pending":
+        case "queued":
             return (
                 <span className="px-2 py-0.5 text-xs rounded-full bg-gray-500/20 text-gray-400">
-                    Pending
+                    Queued
                 </span>
             );
         case "downloading":
@@ -51,6 +51,13 @@ const getStatusBadge = (status: string) => {
                 <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400">
                     Cancelled
                 </span>
+            );
+        case "fetching_metadata":
+            return (
+                <div className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-400">
+                    <span className="w-2 h-2 rounded-full border border-blue-400 border-t-transparent animate-spin" />
+                    <span>Loading...</span>
+                </div>
             );
         default:
             return null;
@@ -79,7 +86,7 @@ export const QueueItemComponent: React.FC<QueueItemProps> = ({
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center">
+                    <div className={`w-full h-full flex items-center justify-center ${item.status === 'fetching_metadata' ? 'animate-pulse bg-[#161b22]' : ''}`}>
                         <span className="material-symbols-outlined text-2xl text-gray-600">movie</span>
                     </div>
                 )}
@@ -120,16 +127,14 @@ export const QueueItemComponent: React.FC<QueueItemProps> = ({
                 {getStatusBadge(item.status)}
             </div>
 
-            {/* Remove button - only for pending items */}
-            {item.status === "pending" && (
-                <button
-                    onClick={() => onRemove(item.id)}
-                    className="flex-shrink-0 p-1.5 text-[#9dabb9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                    title="Remove from queue"
-                >
-                    <span className="material-symbols-outlined text-lg">close</span>
-                </button>
-            )}
+            {/* Remove button - for queued, fetching, or completed/failed items */}
+            <button
+                onClick={() => onRemove(item.id)}
+                className="flex-shrink-0 p-1.5 text-[#9dabb9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                title="Remove from queue"
+            >
+                <span className="material-symbols-outlined text-lg">close</span>
+            </button>
         </div>
     );
 };

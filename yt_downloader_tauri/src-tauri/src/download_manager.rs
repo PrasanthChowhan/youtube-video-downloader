@@ -18,6 +18,7 @@ pub enum DownloadStatus {
     Completed,
     Failed,
     Cancelled,
+    FetchingMetadata,
 }
 
 /// Progress information for a download
@@ -155,6 +156,26 @@ impl DownloadManager {
         let mut queue = self.queue.lock().unwrap();
         if let Some(item) = queue.iter_mut().find(|item| item.id == id) {
             item.progress = progress;
+        }
+    }
+
+    /// Update an item's details (after metadata fetch)
+    pub fn update_details(
+        &self,
+        id: &str,
+        title: String,
+        uploader: String,
+        thumbnail: Option<String>,
+        duration: Option<String>,
+        filesize: Option<u64>,
+    ) {
+        let mut queue = self.queue.lock().unwrap();
+        if let Some(item) = queue.iter_mut().find(|item| item.id == id) {
+            item.title = title;
+            item.uploader = uploader;
+            item.thumbnail = thumbnail;
+            item.duration_string = duration;
+            item.filesize_approx = filesize;
         }
     }
 

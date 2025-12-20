@@ -702,26 +702,59 @@ async fn manager_add_to_queue(
 ) -> Result<CommandResponse<ManagerQueueItem>, String> {
     let manager = app.state::<Arc<DownloadManager>>();
     
-    // Fetch video info first
-    let video_info = fetch_video_info(&app, &url).await?;
-    
-    let item = ManagerQueueItem::new(
-        url,
-        video_info.title,
-        video_info.uploader,
-        video_info.thumbnail,
-        Some(video_info.duration_string),
-        video_info.filesize_approx,
+    // Create placeholder item immediately
+    let mut item = ManagerQueueItem::new(
+        url.clone(),
+        "Loading...".to_string(),
+        "".to_string(),
+        None,
+        None,
+        None,
     );
+    item.status = DownloadStatus::FetchingMetadata;
     
     let item_clone = item.clone();
+    let item_id = item.id.clone();
     manager.add_item(item);
     
-    // Emit queue state changed
+    // Emit queue state changed (showing Loading item)
     let _ = app.emit("queue-state-changed", manager.get_all());
     
-    // Auto-start downloads if capacity available
-    try_start_next_download(app.clone()).await;
+    // Spawn background task to fetch metadata
+    let app_clone = app.clone();
+    let manager_clone = manager.inner().clone();
+    let url_clone = url.clone();
+    
+    tauri::async_runtime::spawn(async move {
+        // Fetch video info
+        match fetch_video_info(&app_clone, &url_clone).await {
+            Ok(video_info) => {
+                // Update item with real details
+                manager_clone.update_details(
+                    &item_id,
+                    video_info.title,
+                    video_info.uploader,
+                    video_info.thumbnail,
+                    Some(video_info.duration_string),
+                    video_info.filesize_approx,
+                );
+                
+                // Set status to Queued
+                manager_clone.update_status(&item_id, DownloadStatus::Queued, None);
+                
+                // Emit updated state
+                let _ = app_clone.emit("queue-state-changed", manager_clone.get_all());
+                
+                // Auto-start downloads if capacity available
+                try_start_next_download(app_clone).await;
+            },
+            Err(e) => {
+                // Mark as failed
+                manager_clone.update_status(&item_id, DownloadStatus::Failed, Some(format!("Failed to fetch info: {}", e)));
+                let _ = app_clone.emit("queue-state-changed", manager_clone.get_all());
+            }
+        }
+    });
     
     Ok(CommandResponse::ok(item_clone))
 }

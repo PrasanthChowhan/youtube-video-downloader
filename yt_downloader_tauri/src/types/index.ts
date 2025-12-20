@@ -69,7 +69,7 @@ export interface DownloadHistory {
 }
 
 /** Status of a queue item (matches new manager) */
-export type ManagerQueueStatus = "queued" | "downloading" | "completed" | "failed" | "cancelled";
+export type ManagerQueueStatus = "queued" | "downloading" | "completed" | "failed" | "cancelled" | "fetching_metadata";
 
 /** Per-item progress info */
 export interface ItemProgress {

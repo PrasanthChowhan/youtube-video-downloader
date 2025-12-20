@@ -37,6 +37,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
             case "completed": return "text-green-400 bg-green-400/20";
             case "failed": return "text-red-400 bg-red-400/20";
             case "cancelled": return "text-orange-400 bg-orange-400/20";
+            case "fetching_metadata": return "text-blue-400 bg-blue-400/10 animate-pulse";
             default: return "text-gray-400 bg-gray-400/20";
         }
     };
@@ -47,6 +48,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
             case "completed": return "check_circle";
             case "failed": return "error";
             case "cancelled": return "cancel";
+            case "fetching_metadata": return "downloading"; // Use downloading icon or spinner logic if possible, but icon is fine
             default: return "schedule";
         }
     };
@@ -87,7 +89,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                     className="w-16 h-9 rounded object-cover flex-shrink-0"
                 />
             ) : (
-                <div className="w-16 h-9 rounded bg-[#2a3444] flex items-center justify-center flex-shrink-0">
+                <div className={`w-16 h-9 rounded bg-[#2a3444] flex items-center justify-center flex-shrink-0 ${item.status === 'fetching_metadata' ? 'animate-pulse' : ''}`}>
                     <span className="material-symbols-outlined text-[#637588]">movie</span>
                 </div>
             )}
@@ -164,6 +166,15 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                     </button>
                 )}
                 {item.status === "queued" && (
+                    <button
+                        onClick={() => onRemove(item.id)}
+                        className="p-1.5 text-[#637588] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        title="Remove from queue"
+                    >
+                        <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                )}
+                {item.status === "fetching_metadata" && (
                     <button
                         onClick={() => onRemove(item.id)}
                         className="p-1.5 text-[#637588] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
