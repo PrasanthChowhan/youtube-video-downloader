@@ -137,10 +137,13 @@ pub async fn download_video_with_child(
 
     let output_template = output_dir.join(filename_template).to_string_lossy().to_string();
 
+    // Prefer mp4/m4a formats for maximum compatibility (h264 video, aac audio)
+    // Fall back to best available if preferred formats unavailable
     let mut args = vec![
-        "-f".to_string(), "bestvideo[height<=2160]+bestaudio/best".to_string(),
+        "-f".to_string(), "bestvideo[ext=mp4][height<=2160]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best".to_string(),
         "--merge-output-format".to_string(), "mp4".to_string(),
         "-o".to_string(), output_template,
+        "--restrict-filenames".to_string(), // Use safe ASCII-only filenames
         "--newline".to_string(),
         "--progress-template".to_string(),
         "download:%(progress.percent)s|%(progress.speed)s|%(progress.eta)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
@@ -222,6 +225,18 @@ pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
                 eta_str.to_string()
             };
 
+            // Extract filename from 6th field if present
+            let filename = if parts.len() >= 6 {
+                let path = parts[5].trim();
+                if !path.is_empty() && path != "NA" && path != "N/A" {
+                    Some(path.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             return Some(DownloadProgress {
                 status: "downloading".to_string(),
                 percent,
@@ -229,8 +244,76 @@ pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
                 eta,
                 downloaded_bytes: downloaded,
                 total_bytes: total,
-                filename: None,
+                filename: None, // Filename is captured from Destination line, not progress
             });
+        }
+    }
+
+    // Capture the actual destination file path
+    if line.contains("[download] Destination:") {
+        let parts: Vec<&str> = line.splitn(2, "Destination:").collect();
+        if parts.len() >= 2 {
+            let path = parts[1].trim();
+            return Some(DownloadProgress {
+                status: "downloading".to_string(),
+                percent: 0.0,
+                filename: Some(path.to_string()),
+                ..Default::default()
+            });
+        }
+    }
+
+    // Capture already downloaded file path
+    // Format: [download] /path/to/file.mp4 has already been downloaded
+    if line.contains("has already been downloaded") {
+        let line = line.trim();
+        if line.starts_with("[download]") {
+            let path_part = &line[10..]; // Skip "[download] "
+            if let Some(end) = path_part.find(" has already") {
+                let path = path_part[..end].trim();
+                return Some(DownloadProgress {
+                    status: "finished".to_string(),
+                    percent: 100.0,
+                    filename: Some(path.to_string()),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    // Capture the final merged file path
+    if line.contains("[Merger] Merging formats into") {
+        // Format: [Merger] Merging formats into "path/to/file.mp4"
+        if let Some(start) = line.find('"') {
+            if let Some(end) = line.rfind('"') {
+                if end > start {
+                    let path = &line[start + 1..end];
+                    return Some(DownloadProgress {
+                        status: "merging".to_string(),
+                        percent: 100.0,
+                        filename: Some(path.to_string()),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+    }
+
+    // Capture file path from ffmpeg concat operation
+    // Format: [FixupM3u8] Fixing MPEG-TS in MP4 container of "path/to/file.mp4"
+    if line.contains("Fixing") && line.contains("container of") {
+        if let Some(start) = line.find('"') {
+            if let Some(end) = line.rfind('"') {
+                if end > start {
+                    let path = &line[start + 1..end];
+                    return Some(DownloadProgress {
+                        status: "processing".to_string(),
+                        percent: 100.0,
+                        filename: Some(path.to_string()),
+                        ..Default::default()
+                    });
+                }
+            }
         }
     }
 

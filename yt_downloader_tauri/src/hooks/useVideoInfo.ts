@@ -11,12 +11,12 @@ export function useVideoInfo() {
     const [error, setError] = useState<string | null>(null);
     const [downloadMode, setDownloadMode] = useState<DownloadMode>(null);
 
-    const fetchInfo = useCallback(async (url: string) => {
+    const fetchInfo = useCallback(async (url: string): Promise<VideoInfo | null> => {
         const trimmedUrl = url.trim();
         if (!trimmedUrl) {
             setVideoInfo(null);
             setDownloadMode(null);
-            return;
+            return null;
         }
 
         if (isYouTubeUrl(trimmedUrl)) {
@@ -28,11 +28,14 @@ export function useVideoInfo() {
                 const response = await invoke<CommandResponse<VideoInfo>>("get_video_info", { url: trimmedUrl });
                 if (response.success && response.data) {
                     setVideoInfo(response.data);
+                    return response.data;
                 } else {
                     setError(response.error || "Failed to fetch video info");
+                    return null;
                 }
             } catch (e) {
                 setError(String(e));
+                return null;
             } finally {
                 setIsLoading(false);
             }
@@ -40,9 +43,11 @@ export function useVideoInfo() {
             setDownloadMode("direct");
             setVideoInfo(null);
             setError(null);
+            return null;
         } else {
             setDownloadMode(null);
             setError("Invalid URL");
+            return null;
         }
     }, []);
 

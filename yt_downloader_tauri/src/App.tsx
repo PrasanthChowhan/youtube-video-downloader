@@ -5,8 +5,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useSettings, useVideoInfo, useDownload } from "./hooks";
-import { UrlInput, DownloadCard, BottomNav } from "./components";
+import { useSettings, useVideoInfo, useDownload, useDownloadHistory } from "./hooks";
+import { UrlInput, DownloadCard, BottomNav, DownloadHistoryItem } from "./components";
 import type { AccelerationConfig, CommandResponse } from "./types";
 import "./App.css";
 
@@ -31,6 +31,7 @@ function App() {
   const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
   const { videoInfo, isLoading, error, downloadMode, fetchInfo, clearInfo } = useVideoInfo();
   const { progress, isDownloading, startDownload } = useDownload();
+  const { records, isLoading: historyLoading, fetchHistory, deleteRecord, clearHistory, openFile, openInFolder } = useDownloadHistory();
 
   // Load acceleration config on mount
   useEffect(() => {
@@ -49,10 +50,10 @@ function App() {
     if (!trimmedUrl) return;
 
     // Fetch video info first
-    await fetchInfo(trimmedUrl);
+    const info = await fetchInfo(trimmedUrl);
 
-    // Start download
-    await startDownload(trimmedUrl, outputPath, downloadMode, settings.filename_template);
+    // Start download with video info for history tracking
+    await startDownload(trimmedUrl, outputPath, downloadMode, settings.filename_template, info || undefined);
   }, [url, outputPath, downloadMode, settings.filename_template, fetchInfo, startDownload]);
 
   /**
@@ -344,16 +345,53 @@ function App() {
 
         {activeTab === "downloads" && (
           <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
-            <div className="pt-8 pb-6">
-              <h1 className="text-3xl font-bold mb-2">Downloads</h1>
-              <p className="text-[#9dabb9]">Your download history</p>
+            <div className="pt-8 pb-6 flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold mb-2">Downloads</h1>
+                <p className="text-[#9dabb9]">Your download history</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchHistory}
+                  className="p-2 text-[#9dabb9] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                  title="Refresh"
+                >
+                  <span className="material-symbols-outlined">refresh</span>
+                </button>
+                {records.length > 0 && (
+                  <button
+                    onClick={clearHistory}
+                    className="p-2 text-[#9dabb9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                    title="Clear all history"
+                  >
+                    <span className="material-symbols-outlined">delete_sweep</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Empty state */}
-            <div className="flex-1 flex flex-col items-center justify-center text-[#637588] py-16">
-              <span className="material-symbols-outlined text-6xl mb-4 opacity-30">folder_open</span>
-              <p className="text-sm">No downloads yet</p>
-            </div>
+            {historyLoading ? (
+              <div className="flex-1 flex items-center justify-center">
+                <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+              </div>
+            ) : records.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-[#637588] py-16">
+                <span className="material-symbols-outlined text-6xl mb-4 opacity-30">folder_open</span>
+                <p className="text-sm">No downloads yet</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {records.map((record) => (
+                  <DownloadHistoryItem
+                    key={record.id}
+                    record={record}
+                    onOpenFile={openFile}
+                    onOpenFolder={openInFolder}
+                    onDelete={deleteRecord}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

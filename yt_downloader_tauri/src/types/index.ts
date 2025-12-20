@@ -45,3 +45,25 @@ export interface AccelerationConfig {
 }
 
 export type DownloadMode = "youtube" | "direct" | null;
+
+/** Status of a download record */
+export type DownloadStatus = "completed" | "cancelled" | "failed" | "file_not_found";
+
+/** A single download history record */
+export interface DownloadRecord {
+    id: string;
+    url: string;
+    title: string;
+    uploader: string;
+    thumbnail: string | null;
+    file_path: string | null;
+    file_size: number | null;
+    status: DownloadStatus;
+    created_at: number;
+    completed_at: number | null;
+}
+
+/** Download history container */
+export interface DownloadHistory {
+    records: DownloadRecord[];
+}

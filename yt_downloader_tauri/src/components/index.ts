@@ -6,3 +6,4 @@ export { BottomNav } from "./BottomNav";
 export { RecentDownloads } from "./RecentDownloads";
 export { ProgressBar } from "./ProgressBar";
 export { VideoPopup } from "./VideoPopup";
+export { DownloadHistoryItem } from "./DownloadHistoryItem";

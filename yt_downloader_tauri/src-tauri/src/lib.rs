@@ -6,11 +6,13 @@
 
 mod acceleration_config;
 mod binary_downloader;
+mod download_history;
 mod downloader;
 mod response;
 mod settings;
 
 use acceleration_config::AccelerationConfig;
+use download_history::{DownloadHistory, DownloadRecord, DownloadStatus};
 use downloader::{fetch_video_info, get_download_dir, DownloadProgress, VideoInfo};
 use response::CommandResponse;
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
@@ -244,6 +246,142 @@ async fn set_acceleration_config(config: AccelerationConfig) -> CommandResponse<
     config.save().into()
 }
 
+// ============================================================================
+// Download History Commands
+// ============================================================================
+
+/// Get all download history records
+#[tauri::command]
+fn get_download_history() -> CommandResponse<DownloadHistory> {
+    CommandResponse::ok(download_history::load_history())
+}
+
+/// Add a new download record to history
+#[tauri::command]
+fn add_download_record(record: DownloadRecord) -> CommandResponse<()> {
+    download_history::add_record(record).into()
+}
+
+/// Delete a record from history
+#[tauri::command]
+fn delete_history_record(id: String) -> CommandResponse<()> {
+    download_history::delete_record(&id).into()
+}
+
+/// Clear all download history
+#[tauri::command]
+fn clear_download_history() -> CommandResponse<()> {
+    download_history::clear_all().into()
+}
+
+/// Check if a file exists at the given path
+#[tauri::command]
+fn check_file_exists(path: String) -> bool {
+    download_history::check_file_exists(&path)
+}
+
+/// Open file location in system file explorer
+#[tauri::command]
+async fn open_file_location(path: String) -> Result<(), String> {
+    let file_path = std::path::PathBuf::from(&path);
+    
+    if !file_path.exists() {
+        return Err("Path not found".to_string());
+    }
+    
+    // Check if path is a directory or a file
+    let is_dir = file_path.is_dir();
+    
+    #[cfg(target_os = "windows")]
+    {
+        if is_dir {
+            // Open directory directly
+            std::process::Command::new("explorer")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        } else {
+            // Open folder and select file
+            std::process::Command::new("explorer")
+                .args(["/select,", &path])
+                .spawn()
+                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        }
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        if is_dir {
+            std::process::Command::new("open")
+                .arg(&path)
+                .spawn()
+                .map_err(|e| format!("Failed to open Finder: {}", e))?;
+        } else {
+            std::process::Command::new("open")
+                .args(["-R", &path])
+                .spawn()
+                .map_err(|e| format!("Failed to open Finder: {}", e))?;
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        let target: String = if is_dir { 
+            path.clone()
+        } else { 
+            file_path.parent()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or(path.clone())
+        };
+        std::process::Command::new("xdg-open")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+/// Open a file with the system default application
+#[tauri::command]
+async fn open_file(path: String) -> Result<(), String> {
+    let file_path = std::path::PathBuf::from(&path);
+    
+    if !file_path.exists() {
+        return Err("File not found".to_string());
+    }
+    
+    if file_path.is_dir() {
+        return Err("Path is a directory, not a file".to_string());
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    Ok(())
+}
+
 /// Ensure aria2c binary is available
 pub async fn ensure_aria2c_available() -> Result<(), String> {
     binary_downloader::ensure_aria2c().await
@@ -274,6 +412,14 @@ pub fn run() {
             save_settings,
             get_acceleration_config,
             set_acceleration_config,
+            // Download history commands
+            get_download_history,
+            add_download_record,
+            delete_history_record,
+            clear_download_history,
+            check_file_exists,
+            open_file_location,
+            open_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
