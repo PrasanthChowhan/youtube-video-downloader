@@ -41,6 +41,7 @@ export interface AccelerationConfig {
     min_file_size_mb: number;
     use_aria2c: boolean;
     aria2_min_split_size: string;
+    smart_mode: boolean;
 }
 
 export type DownloadMode = "youtube" | "direct" | null;

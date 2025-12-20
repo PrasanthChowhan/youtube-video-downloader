@@ -24,6 +24,7 @@ function App() {
     min_file_size_mb: 10,
     use_aria2c: true,
     aria2_min_split_size: "1M",
+    smart_mode: true,
   });
 
   // Hooks
@@ -254,38 +255,56 @@ function App() {
                   />
                 </label>
 
-                {/* Concurrent Fragments */}
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <label className="text-sm text-[#9dabb9]">Concurrent Fragments</label>
-                    <span className="text-sm font-medium">{accelConfig.max_concurrent_fragments}</span>
+                {/* Smart Mode */}
+                <label className="flex items-center justify-between cursor-pointer p-3 bg-[#1e2329] border border-[#283039] rounded-lg">
+                  <div>
+                    <span className="block text-sm font-medium text-white">Smart Mode</span>
+                    <span className="block text-xs text-primary mt-0.5">Auto-optimizes for speed & large files</span>
                   </div>
                   <input
-                    type="range"
-                    min="1"
-                    max="32"
-                    step="1"
-                    value={accelConfig.max_concurrent_fragments}
-                    onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
-                    className="w-full h-2 bg-[#111418] rounded-lg appearance-none cursor-pointer accent-primary"
+                    type="checkbox"
+                    checked={accelConfig.smart_mode}
+                    onChange={(e) => setAccelConfig({ ...accelConfig, smart_mode: e.target.checked })}
+                    className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
                   />
-                  <div className="flex justify-between text-xs text-[#9dabb9] mt-1">
-                    <span>1</span>
-                    <span>32</span>
-                  </div>
-                </div>
+                </label>
 
-                {/* Min Split Size */}
-                <div>
-                  <label className="block text-sm text-[#9dabb9] mb-2">Aria2 Min Split Size (e.g. 1M)</label>
-                  <input
-                    type="text"
-                    value={accelConfig.aria2_min_split_size || "1M"}
-                    onChange={(e) => setAccelConfig({ ...accelConfig, aria2_min_split_size: e.target.value })}
-                    className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="1M"
-                  />
-                </div>
+                {!accelConfig.smart_mode && (
+                  <>
+                    {/* Concurrent Fragments */}
+                    <div>
+                      <div className="flex justify-between mb-2">
+                        <label className="text-sm text-[#9dabb9]">Concurrent Fragments</label>
+                        <span className="text-sm font-medium">{accelConfig.max_concurrent_fragments}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="32"
+                        step="1"
+                        value={accelConfig.max_concurrent_fragments}
+                        onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
+                        className="w-full h-2 bg-[#111418] rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                      <div className="flex justify-between text-xs text-[#9dabb9] mt-1">
+                        <span>1</span>
+                        <span>32</span>
+                      </div>
+                    </div>
+
+                    {/* Min Split Size */}
+                    <div>
+                      <label className="block text-sm text-[#9dabb9] mb-2">Aria2 Min Split Size (e.g. 1M)</label>
+                      <input
+                        type="text"
+                        value={accelConfig.aria2_min_split_size || "1M"}
+                        onChange={(e) => setAccelConfig({ ...accelConfig, aria2_min_split_size: e.target.value })}
+                        className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="1M"
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* Min File Size */}
                 <div>

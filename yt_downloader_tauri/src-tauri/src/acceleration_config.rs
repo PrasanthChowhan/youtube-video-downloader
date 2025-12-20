@@ -28,6 +28,10 @@ pub struct AccelerationConfig {
 
     /// Minimum split size for aria2c (e.g., "1M", "5M", "10M")
     pub aria2_min_split_size: String,
+
+    /// Smart Mode: Automatically optimize settings based on file size
+    /// If true, overrides fragments and split size with calculated optimums
+    pub smart_mode: bool,
 }
 
 impl Default for AccelerationConfig {
@@ -39,6 +43,7 @@ impl Default for AccelerationConfig {
             min_file_size_mb: 10,
             use_aria2c: true, // Enabled by default for better speeds
             aria2_min_split_size: "1M".to_string(),
+            smart_mode: true, // Auto-optimize by default
         }
     }
 }
@@ -128,6 +133,47 @@ impl AccelerationConfig {
             self.max_concurrent_fragments
         } else {
             1 // No acceleration
+        }
+    }
+
+    /// Smart Mode: Calculate optimized parameters based on file size
+    /// Returns (concurrent_fragments, min_split_size)
+    pub fn get_optimized_params(&self, filesize_bytes: Option<u64>) -> (u8, String) {
+        if !self.enabled {
+            return (1, "1M".to_string());
+        }
+
+        // If Smart Mode is OFF, return user settings
+        if !self.smart_mode {
+            return (
+                self.max_concurrent_fragments,
+                self.aria2_min_split_size.clone(),
+            );
+        }
+
+        // --- Smart Mode Logic ---
+
+        let Some(bytes) = filesize_bytes else {
+            // Unknown size: Use safe defaults for general purpose
+            return (16, "1M".to_string());
+        };
+
+        let mb = bytes / (1024 * 1024);
+
+        if mb < 100 {
+            // Small file (< 100MB): Burst speed
+            // Use MAX connections with small split to saturate link instantly
+            (32, "1M".to_string())
+        } else if mb < 2000 {
+            // Medium file (100MB - 2GB): Balanced
+            // 32 connections is safe for medium duration, 5M split prevents overhead
+            (32, "5M".to_string())
+        } else {
+            // Large file (> 2GB): Stability focused
+            // YouTube throttles long-lived high-connection sessions.
+            // 16 connections is the "safe harbor" limit.
+            // 10M split reduces the total number of HTTP requests significantly.
+            (16, "10M".to_string())
         }
     }
 }

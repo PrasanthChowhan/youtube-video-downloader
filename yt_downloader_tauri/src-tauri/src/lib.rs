@@ -62,11 +62,7 @@ async fn start_download(
         Err(_) => None,
     };
 
-    let concurrent_fragments = if accel_config.should_accelerate(filesize) {
-        accel_config.get_concurrent_fragments()
-    } else {
-        1
-    };
+    let (concurrent_fragments, aria2_split_size) = accel_config.get_optimized_params(filesize);
 
     let use_throttle = accel_config.use_throttle_protection;
     let use_aria2c = accel_config.use_aria2c;
@@ -80,7 +76,7 @@ async fn start_download(
         concurrent_fragments,
         use_throttle,
         use_aria2c,
-        Some(accel_config.aria2_min_split_size),
+        Some(aria2_split_size),
     )
     .await?;
 

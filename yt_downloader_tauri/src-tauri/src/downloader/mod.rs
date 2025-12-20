@@ -148,7 +148,7 @@ pub async fn download_video_with_child(
 
     if use_aria2c {
         // Use high connection count for aria2c speed boost
-        let connections = concurrent_fragments.max(16); // Use at least 16 connections
+        let connections = concurrent_fragments;
         let split_size = aria2_split_size.unwrap_or_else(|| "1M".to_string());
         let aria_args = format!("-x {} -s {} -k {} -c --file-allocation=none", connections, connections, split_size);
         eprintln!("[DEBUG] Using aria2c with args: {}", aria_args);
