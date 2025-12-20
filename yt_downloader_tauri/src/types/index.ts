@@ -67,3 +67,46 @@ export interface DownloadRecord {
 export interface DownloadHistory {
     records: DownloadRecord[];
 }
+
+/** Status of a queue item (matches new manager) */
+export type ManagerQueueStatus = "queued" | "downloading" | "completed" | "failed" | "cancelled";
+
+/** Per-item progress info */
+export interface ItemProgress {
+    percent: number;
+    speed: string;
+    eta: string;
+    downloaded_bytes: number;
+    total_bytes: number | null;
+    filename: string | null;
+}
+
+/** A single item in the new download manager queue */
+export interface ManagerQueueItem {
+    id: string;
+    url: string;
+    title: string;
+    uploader: string;
+    thumbnail: string | null;
+    duration_string: string | null;
+    filesize_approx: number | null;
+    status: ManagerQueueStatus;
+    progress: ItemProgress;
+    error: string | null;
+}
+
+/** Legacy queue status */
+export type QueueStatus = "pending" | "downloading" | "completed" | "failed" | "cancelled";
+
+/** Legacy queue item (for old queue system) */
+export interface QueueItem {
+    id: string;
+    url: string;
+    title: string;
+    uploader: string;
+    thumbnail: string | null;
+    duration_string: string | null;
+    filesize_approx: number | null;
+    status: QueueStatus;
+    error: string | null;
+}

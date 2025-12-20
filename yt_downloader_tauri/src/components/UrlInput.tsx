@@ -41,8 +41,8 @@ export const UrlInput: React.FC<UrlInputProps> = ({
                 disabled={disabled || isLoading || !url.trim()}
                 className="flex-none h-14 px-8 rounded-xl bg-primary hover:bg-blue-600 text-white text-base font-bold leading-normal tracking-[0.015em] shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <span className="material-symbols-outlined">download</span>
-                <span>{isLoading ? "Loading..." : "Download"}</span>
+                <span className="material-symbols-outlined">playlist_add</span>
+                <span>{isLoading ? "Adding..." : "Add to Queue"}</span>
             </button>
         </div>
     );

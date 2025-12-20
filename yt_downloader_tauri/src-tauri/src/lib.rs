@@ -7,20 +7,25 @@
 mod acceleration_config;
 mod binary_downloader;
 mod download_history;
+mod download_manager;
+mod download_queue;
 mod downloader;
 mod response;
 mod settings;
 
 use acceleration_config::AccelerationConfig;
-use download_history::{DownloadHistory, DownloadRecord, DownloadStatus};
+use download_history::{DownloadHistory, DownloadRecord, DownloadStatus as HistoryStatus};
+use download_manager::{DownloadManager, DownloadHandle, DownloadStatus, ItemProgress, QueueItem as ManagerQueueItem};
+use download_queue::{DownloadQueue, QueueItem, QueueStatus};
 use downloader::{fetch_video_info, get_download_dir, DownloadProgress, VideoInfo};
 use response::CommandResponse;
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_shell::process::CommandChild;
 use std::sync::Mutex;
+use tokio::sync::mpsc;
 
 /// Global state to track active download process
 pub struct DownloadState {
@@ -387,6 +392,250 @@ pub async fn ensure_aria2c_available() -> Result<(), String> {
     binary_downloader::ensure_aria2c().await
 }
 
+// ============================================================================
+// Download Queue Commands
+// ============================================================================
+
+/// Add a URL to the download queue
+#[tauri::command]
+async fn add_to_queue(
+    app: AppHandle,
+    queue: State<'_, DownloadQueue>,
+    url: String,
+) -> Result<CommandResponse<QueueItem>, String> {
+    // Fetch video info first
+    let video_info = fetch_video_info(&app, &url).await?;
+    
+    let item = QueueItem::new(
+        url,
+        video_info.title,
+        video_info.uploader,
+        video_info.thumbnail,
+        Some(video_info.duration_string),
+        video_info.filesize_approx,
+    );
+    
+    let item_clone = item.clone();
+    queue.add(item);
+    
+    // Emit queue update event
+    let _ = app.emit("queue-updated", queue.get_all());
+    
+    Ok(CommandResponse::ok(item_clone))
+}
+
+/// Remove an item from the queue
+#[tauri::command]
+fn remove_from_queue(
+    app: AppHandle,
+    queue: State<'_, DownloadQueue>,
+    id: String,
+) -> Result<CommandResponse<bool>, String> {
+    let removed = queue.remove(&id);
+    
+    // Emit queue update event
+    let _ = app.emit("queue-updated", queue.get_all());
+    
+    Ok(CommandResponse::ok(removed))
+}
+
+/// Get all items in the queue
+#[tauri::command]
+fn get_queue(queue: State<'_, DownloadQueue>) -> Result<CommandResponse<Vec<QueueItem>>, String> {
+    Ok(CommandResponse::ok(queue.get_all()))
+}
+
+/// Clear all pending items from the queue
+#[tauri::command]
+fn clear_queue(
+    app: AppHandle,
+    queue: State<'_, DownloadQueue>,
+) -> Result<CommandResponse<()>, String> {
+    queue.clear_pending();
+    
+    // Emit queue update event
+    let _ = app.emit("queue-updated", queue.get_all());
+    
+    Ok(CommandResponse::ok(()))
+}
+
+/// Start processing the queue
+#[tauri::command]
+async fn start_queue(
+    app: AppHandle,
+    download_state: State<'_, DownloadState>,
+    queue: State<'_, DownloadQueue>,
+) -> Result<CommandResponse<String>, String> {
+    // Check if already processing
+    if queue.is_processing() {
+        return Ok(CommandResponse::err("Queue is already processing".to_string()));
+    }
+    
+    // Check if there are pending items
+    if queue.pending_count() == 0 {
+        return Ok(CommandResponse::err("No pending items in queue".to_string()));
+    }
+    
+    queue.set_processing(true);
+    
+    // Process queue items one by one
+    process_next_queue_item(app, download_state, queue).await
+}
+
+/// Process the next pending item in the queue
+async fn process_next_queue_item(
+    app: AppHandle,
+    download_state: State<'_, DownloadState>,
+    queue: State<'_, DownloadQueue>,
+) -> Result<CommandResponse<String>, String> {
+    // Get next pending item
+    let next_item = match queue.get_next_pending() {
+        Some(item) => item,
+        None => {
+            queue.set_processing(false);
+            return Ok(CommandResponse::ok("Queue completed".to_string()));
+        }
+    };
+    
+    let item_id = next_item.id.clone();
+    let url = next_item.url.clone();
+    let title = next_item.title.clone();
+    let uploader = next_item.uploader.clone();
+    let thumbnail = next_item.thumbnail.clone();
+    let filesize = next_item.filesize_approx;
+    
+    // Update status to downloading
+    queue.update_status(&item_id, QueueStatus::Downloading, None);
+    let _ = app.emit("queue-updated", queue.get_all());
+    
+    // Get settings for download
+    let settings = load_settings();
+    let output_dir = PathBuf::from(&settings.download_path);
+    let template = settings.filename_template.clone();
+    
+    // Start download using existing logic
+    let accel_config = AccelerationConfig::load();
+    
+    // Determine if acceleration should be used
+    let use_acceleration = accel_config.enabled;
+    let concurrent_fragments = if use_acceleration {
+        accel_config.max_concurrent_fragments
+    } else {
+        1
+    };
+    
+    // Start download
+    let result = downloader::download_video_with_child(
+        &app,
+        &url,
+        output_dir.clone(),
+        &template,
+        concurrent_fragments,
+        accel_config.use_throttle_protection,
+        accel_config.use_aria2c,
+        Some(accel_config.aria2_min_split_size.clone()),
+    ).await;
+    
+    match result {
+        Ok((mut rx, child)) => {
+            // Store child process
+            let pid = child.pid();
+            {
+                let mut guard = download_state.active_child.lock().unwrap();
+                *guard = Some((child, pid));
+            }
+            
+            let mut last_filename: Option<String> = None;
+            let mut total_bytes: Option<u64> = None;
+            
+            // Process events
+            while let Some(event) = rx.recv().await {
+                match event {
+                    tauri_plugin_shell::process::CommandEvent::Stdout(line_bytes) => {
+                        let line = String::from_utf8_lossy(&line_bytes);
+                        if let Some(progress) = downloader::parse_progress_line(&line) {
+                            // Track filename and total bytes
+                            if progress.filename.is_some() {
+                                last_filename = progress.filename.clone();
+                            }
+                            if progress.total_bytes.is_some() {
+                                total_bytes = progress.total_bytes;
+                            }
+                            
+                            // Emit progress with item ID for queue tracking
+                            let _ = app.emit("queue-progress", serde_json::json!({
+                                "item_id": item_id,
+                                "progress": progress
+                            }));
+                            
+                            // Also emit regular download-progress for compatibility
+                            let _ = app.emit("download-progress", &progress);
+                        }
+                    }
+                    tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                        if let Some(code) = payload.code {
+                            if code == 0 {
+                                // Success - mark as completed
+                                queue.update_status(&item_id, QueueStatus::Completed, None);
+                                
+                                // Add to download history
+                                let record = DownloadRecord {
+                                    id: uuid::Uuid::new_v4().to_string(),
+                                    url: url.clone(),
+                                    title: title.clone(),
+                                    uploader: uploader.clone(),
+                                    thumbnail: thumbnail.clone(),
+                                    file_path: last_filename.clone(),
+                                    file_size: total_bytes.or(filesize),
+                                    status: HistoryStatus::Completed,
+                                    created_at: chrono::Utc::now().timestamp(),
+                                    completed_at: Some(chrono::Utc::now().timestamp()),
+                                };
+                                let _ = download_history::add_record(record);
+                                
+                                // Emit history update event
+                                let _ = app.emit("history-updated", ());
+                            } else {
+                                // Failed
+                                queue.update_status(&item_id, QueueStatus::Failed, Some(format!("Exit code: {}", code)));
+                            }
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            
+            // Clear active child
+            {
+                let mut guard = download_state.active_child.lock().unwrap();
+                *guard = None;
+            }
+            
+            // Remove completed/failed items from queue (they're in history now)
+            queue.remove(&item_id);
+            
+            // Emit queue update
+            let _ = app.emit("queue-updated", queue.get_all());
+            
+            // Process next item (emit event for frontend to trigger)
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = app_clone.emit("queue-item-finished", ());
+            });
+            
+            Ok(CommandResponse::ok("Item completed".to_string()))
+        }
+        Err(e) => {
+            queue.update_status(&item_id, QueueStatus::Failed, Some(e.clone()));
+            let _ = app.emit("queue-updated", queue.get_all());
+            queue.set_processing(false);
+            Err(e)
+        }
+    }
+}
+
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -395,6 +644,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .manage(DownloadState::default())
+        .manage(DownloadQueue::new())
+        .manage(Arc::new(DownloadManager::default()))
         .setup(|_app| {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = ensure_aria2c_available().await {
@@ -420,7 +671,359 @@ pub fn run() {
             check_file_exists,
             open_file_location,
             open_file,
+            // Download queue commands (legacy)
+            add_to_queue,
+            remove_from_queue,
+            get_queue,
+            clear_queue,
+            start_queue,
+            // Concurrent download manager commands
+            manager_add_to_queue,
+            manager_remove_from_queue,
+            manager_reorder_queue,
+            manager_cancel_download,
+            manager_get_queue_state,
+            manager_set_max_concurrent,
+            manager_continue_queue,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ============================================================================
+// Concurrent Download Manager Commands
+// ============================================================================
+
+/// Add a URL to the download manager queue (fetches metadata, auto-starts if capacity)
+#[tauri::command]
+async fn manager_add_to_queue(
+    app: AppHandle,
+    url: String,
+) -> Result<CommandResponse<ManagerQueueItem>, String> {
+    let manager = app.state::<Arc<DownloadManager>>();
+    
+    // Fetch video info first
+    let video_info = fetch_video_info(&app, &url).await?;
+    
+    let item = ManagerQueueItem::new(
+        url,
+        video_info.title,
+        video_info.uploader,
+        video_info.thumbnail,
+        Some(video_info.duration_string),
+        video_info.filesize_approx,
+    );
+    
+    let item_clone = item.clone();
+    manager.add_item(item);
+    
+    // Emit queue state changed
+    let _ = app.emit("queue-state-changed", manager.get_all());
+    
+    // Auto-start downloads if capacity available
+    try_start_next_download(app.clone()).await;
+    
+    Ok(CommandResponse::ok(item_clone))
+}
+
+/// Remove an item from the queue (cancels if downloading)
+#[tauri::command]
+fn manager_remove_from_queue(
+    app: AppHandle,
+    id: String,
+) -> Result<CommandResponse<bool>, String> {
+    let manager = app.state::<Arc<DownloadManager>>();
+    
+    // Cancel if downloading
+    manager.cancel_download(&id);
+    
+    // Remove from queue
+    let removed = manager.remove_item(&id);
+    
+    // Emit queue state changed
+    let _ = app.emit("queue-state-changed", manager.get_all());
+    
+    Ok(CommandResponse::ok(removed))
+}
+
+/// Reorder an item in the queue
+#[tauri::command]
+fn manager_reorder_queue(
+    app: AppHandle,
+    id: String,
+    new_index: usize,
+) -> Result<CommandResponse<bool>, String> {
+    let manager = app.state::<Arc<DownloadManager>>();
+    
+    let success = manager.reorder_item(&id, new_index);
+    
+    // Emit queue state changed
+    let _ = app.emit("queue-state-changed", manager.get_all());
+    
+    Ok(CommandResponse::ok(success))
+}
+
+/// Cancel a specific download
+#[tauri::command]
+fn manager_cancel_download(
+    app: AppHandle,
+    id: String,
+) -> Result<CommandResponse<bool>, String> {
+    let manager = app.state::<Arc<DownloadManager>>();
+    
+    let cancelled = manager.cancel_download(&id);
+    if cancelled {
+        manager.update_status(&id, DownloadStatus::Cancelled, None);
+        let _ = app.emit("queue-state-changed", manager.get_all());
+    }
+    
+    Ok(CommandResponse::ok(cancelled))
+}
+
+/// Get the full queue state
+#[tauri::command]
+fn manager_get_queue_state(app: AppHandle) -> Result<CommandResponse<Vec<ManagerQueueItem>>, String> {
+    let manager = app.state::<Arc<DownloadManager>>();
+    Ok(CommandResponse::ok(manager.get_all()))
+}
+
+/// Set max concurrent downloads
+#[tauri::command]
+fn manager_set_max_concurrent(
+    app: AppHandle,
+    max: u8,
+) -> Result<CommandResponse<u8>, String> {
+    let manager = app.state::<Arc<DownloadManager>>();
+    manager.set_max_concurrent(max);
+    
+    // Try to start more downloads if capacity increased
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        try_start_next_download(app_clone).await;
+    });
+    
+    Ok(CommandResponse::ok(manager.get_max_concurrent()))
+}
+
+/// Try to start the next queued download if there's capacity
+async fn try_start_next_download(app: AppHandle) {
+    let manager = app.state::<Arc<DownloadManager>>().inner().clone();
+    
+    // Check capacity
+    while manager.has_capacity() {
+        // Get next queued item
+        let next_item = match manager.get_next_queued() {
+            Some(item) => item,
+            None => break, // No more queued items
+        };
+        
+        let item_id = next_item.id.clone();
+        
+        // Update status to downloading
+        manager.update_status(&item_id, DownloadStatus::Downloading, None);
+        let _ = app.emit("queue-state-changed", manager.get_all());
+        
+        // Start the download in a background task
+        let app_clone = app.clone();
+        let item_clone = next_item.clone();
+        let manager_clone = manager.clone();
+        
+        // Create cancel channel
+        let (cancel_tx, cancel_rx) = mpsc::channel::<()>(1);
+        
+        let join_handle = tauri::async_runtime::spawn(async move {
+            run_download_task(app_clone, manager_clone, item_clone, cancel_rx).await;
+        });
+        
+        // Register the handle
+        manager.register_handle(item_id, DownloadHandle {
+            cancel_tx,
+            join_handle,
+        });
+    }
+}
+
+/// Run a single download task
+async fn run_download_task(
+    app: AppHandle,
+    manager: Arc<DownloadManager>,
+    item: ManagerQueueItem,
+    mut cancel_rx: mpsc::Receiver<()>,
+) {
+    let item_id = item.id.clone();
+    let url = item.url.clone();
+    
+    // Get settings
+    let settings = load_settings();
+    let output_dir = PathBuf::from(&settings.download_path);
+    let template = settings.filename_template.clone();
+    
+    // Get acceleration config
+    let accel_config = AccelerationConfig::load();
+    let concurrent_fragments = if accel_config.enabled {
+        accel_config.max_concurrent_fragments
+    } else {
+        1
+    };
+    
+    // Start download
+    let result = downloader::download_video_with_child(
+        &app,
+        &url,
+        output_dir.clone(),
+        &template,
+        concurrent_fragments,
+        accel_config.use_throttle_protection,
+        accel_config.use_aria2c,
+        Some(accel_config.aria2_min_split_size.clone()),
+    ).await;
+    
+    match result {
+        Ok((mut rx, child)) => {
+            let pid = child.pid();
+            
+            let mut child = child;
+
+            
+            let mut last_filename: Option<String> = None;
+            let mut total_bytes: Option<u64> = None;
+            
+            // Process events
+            loop {
+                tokio::select! {
+                    // Check for cancel signal
+                    _ = cancel_rx.recv() => {
+                        // Kill the process
+                        // Kill the process tree (subprocesses like aria2c)
+                        kill_process_tree(pid);
+                        
+                        // Also kill direct child as backup
+                        let _ = child.kill();
+                        
+                        // Clean up residual files
+                        if let Some(path_str) = &last_filename {
+                            let path = PathBuf::from(path_str);
+                            
+                            // Try to delete the file itself
+                            if path.exists() {
+                                let _ = std::fs::remove_file(&path);
+                            }
+                            
+                            // Try to delete common partial extensions
+                            let partial_exts = [".part", ".ytdl", ".aria2"];
+                            for ext in partial_exts {
+                                // Manual string manipulation to append extension safely
+                                let mut partial_path_str = path_str.clone();
+                                partial_path_str.push_str(ext);
+                                let partial_path = PathBuf::from(partial_path_str);
+                                
+                                if partial_path.exists() {
+                                    let _ = std::fs::remove_file(partial_path);
+                                }
+                            }
+                        }
+
+                        manager.update_status(&item_id, DownloadStatus::Cancelled, None);
+                        break;
+                    }
+                    // Process download events
+                    event = rx.recv() => {
+                        match event {
+                            Some(tauri_plugin_shell::process::CommandEvent::Stdout(line_bytes)) => {
+                                let line = String::from_utf8_lossy(&line_bytes);
+                                if let Some(progress) = downloader::parse_progress_line(&line) {
+                                    // Track filename and total bytes
+                                    if progress.filename.is_some() {
+                                        last_filename = progress.filename.clone();
+                                    }
+                                    if progress.total_bytes.is_some() {
+                                        total_bytes = progress.total_bytes;
+                                    }
+                                    
+                                    // Update item progress
+                                    manager.update_progress(&item_id, ItemProgress {
+                                        percent: progress.percent,
+                                        speed: progress.speed.clone(),
+                                        eta: progress.eta.clone(),
+                                        downloaded_bytes: progress.downloaded_bytes,
+                                        total_bytes: progress.total_bytes,
+                                        filename: progress.filename.clone(),
+                                    });
+                                    
+                                    // Emit progress event
+                                    let _ = app.emit("download-progress", serde_json::json!({
+                                        "id": item_id,
+                                        "progress": progress
+                                    }));
+                                    
+                                    // Emit queue state
+                                    let _ = app.emit("queue-state-changed", manager.get_all());
+                                }
+                            }
+                            Some(tauri_plugin_shell::process::CommandEvent::Terminated(payload)) => {
+                                if let Some(code) = payload.code {
+                                    if code == 0 {
+                                        // Success
+                                        manager.update_status(&item_id, DownloadStatus::Completed, None);
+                                        
+                                        // Add to history
+                                        let record = DownloadRecord {
+                                            id: uuid::Uuid::new_v4().to_string(),
+                                            url: url.clone(),
+                                            title: item.title.clone(),
+                                            uploader: item.uploader.clone(),
+                                            thumbnail: item.thumbnail.clone(),
+                                            file_path: last_filename.clone(),
+                                            file_size: total_bytes.or(item.filesize_approx),
+                                            status: HistoryStatus::Completed,
+                                            created_at: chrono::Utc::now().timestamp(),
+                                            completed_at: Some(chrono::Utc::now().timestamp()),
+                                        };
+                                        let _ = download_history::add_record(record);
+                                        let _ = app.emit("history-updated", ());
+                                    } else {
+                                        manager.update_status(&item_id, DownloadStatus::Failed, Some(format!("Exit code: {}", code)));
+                                    }
+                                }
+                                break;
+                            }
+                            None => break,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            
+
+        }
+        Err(e) => {
+            manager.update_status(&item_id, DownloadStatus::Failed, Some(e.clone()));
+        }
+    }
+    
+    // Remove handle
+    manager.remove_handle(&item_id);
+    
+    // Remove completed/failed from queue
+    let current_item = manager.get_item(&item_id);
+    if let Some(item) = current_item {
+        if item.status == DownloadStatus::Completed || 
+           item.status == DownloadStatus::Failed ||
+           item.status == DownloadStatus::Cancelled {
+            manager.remove_item(&item_id);
+        }
+    }
+    
+    // Emit queue state
+    let _ = app.emit("queue-state-changed", manager.get_all());
+    
+    // Emit event to signal download finished - frontend or setup listener will trigger next
+    let _ = app.emit("download-task-finished", ());
+}
+
+/// Command to continue processing queue (called after download-task-finished event)
+#[tauri::command]
+async fn manager_continue_queue(app: AppHandle) -> Result<CommandResponse<()>, String> {
+    try_start_next_download(app).await;
+    Ok(CommandResponse::ok(()))
 }
