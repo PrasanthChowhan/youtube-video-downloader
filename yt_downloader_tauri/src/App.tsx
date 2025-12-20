@@ -1,208 +1,170 @@
 /**
- * YouTube Downloader App - Main Component
+ * VideoGet - Main App Component
  */
 
 import { useState, useCallback } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { useSettings, useVideoInfo, useDownload } from "./hooks";
-import { VideoPopup } from "./components";
-import { isYouTubeUrl, isValidUrl } from "./utils/formatters";
+import { Header, UrlInput, DownloadCard, BottomNav, RecentDownloads } from "./components";
 import "./App.css";
+
+type Tab = "settings" | "youtube" | "downloads";
 
 function App() {
   const [url, setUrl] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("youtube");
 
-  const { settings, outputPath, setOutputPath, updateSettings, saveSettings } =
-    useSettings();
-  const { videoInfo, isLoading, error, downloadMode, fetchInfo, clearInfo } =
-    useVideoInfo();
-  const {
-    progress,
-    isDownloading,
-    error: downloadError,
-    startDownload,
-  } = useDownload();
+  // Hooks
+  const { settings, outputPath, setOutputPath, saveSettings } = useSettings();
+  const { videoInfo, isLoading, error, fetchInfo, clearInfo } = useVideoInfo();
+  const { progress, isDownloading, startDownload } = useDownload();
 
-  const handleGo = useCallback(async () => {
+  // Sample recent downloads (will be replaced with actual data)
+  const recentDownloads = [
+    { id: "1", title: "Lofi Hip Hop Radio - Beats to Relax/Study to", type: "audio" as const, size: "45.2 MB", time: "Just now" },
+    { id: "2", title: "Complete Blender 3.0 Tutorial for Beginners", type: "video" as const, size: "1.2 GB", time: "2 hours ago" },
+  ];
+
+  /**
+   * Handle download button click
+   */
+  const handleDownload = useCallback(async () => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
 
-    if (isYouTubeUrl(trimmedUrl) || isValidUrl(trimmedUrl)) {
-      setShowPopup(true);
-      await fetchInfo(trimmedUrl);
-    }
-  }, [url, fetchInfo]);
+    // First fetch video info
+    await fetchInfo(trimmedUrl);
 
-  const handleDownload = useCallback(async () => {
-    await startDownload(
-      url.trim(),
-      outputPath,
-      downloadMode,
-      settings.filename_template
-    );
-  }, [url, outputPath, downloadMode, settings.filename_template, startDownload]);
+    // Then start download
+    await startDownload(trimmedUrl, outputPath, "youtube", settings.filename_template);
+  }, [url, outputPath, settings.filename_template, fetchInfo, startDownload]);
 
-  const handleClosePopup = useCallback(() => {
-    if (!isDownloading) {
-      setShowPopup(false);
-      clearInfo();
-    }
-  }, [isDownloading, clearInfo]);
+  /**
+   * Cancel current download
+   */
+  const handleCancel = useCallback(() => {
+    clearInfo();
+  }, [clearInfo]);
 
-  const handleBrowse = useCallback(async () => {
-    const selected = await open({
-      directory: true,
-      title: "Select Download Folder",
-      defaultPath: outputPath || undefined,
-    });
-    if (selected) {
-      setOutputPath(selected as string);
-    }
-  }, [outputPath, setOutputPath]);
-
-  const handleSaveSettings = useCallback(async () => {
-    await saveSettings();
-    setShowSettings(false);
-  }, [saveSettings]);
+  /**
+   * Switch tabs
+   */
+  const handleTabChange = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+  }, []);
 
   return (
-    <div className="app-container">
-      {/* Top Bar */}
-      <header className="top-bar">
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleGo()}
-          placeholder="Paste URL here..."
-          className="url-input"
-        />
-        <button
-          onClick={handleGo}
-          className="btn-go"
-          disabled={isLoading || !url.trim()}
-        >
-          Go
-        </button>
-        <button
-          onClick={() => setShowSettings(true)}
-          className="btn-settings"
-          title="Settings"
-        >
-          ⚙️
-        </button>
-      </header>
+    <div className="flex flex-col h-screen overflow-hidden">
+      {/* Header */}
+      <Header />
 
-      {/* Main Area */}
-      <main className="main-area">
-        <div className="empty-state">
-          <span className="empty-icon">📥</span>
-          <p>Paste a YouTube URL and click Go</p>
-        </div>
-      </main>
-
-      {/* Bottom Bar */}
-      <footer className="bottom-bar">
-        <div className="source-indicator">
-          {downloadMode === "youtube" && <span className="source-yt">YT</span>}
-          {downloadMode === "direct" && <span className="source-direct">⬇</span>}
-          {!downloadMode && <span className="source-none">—</span>}
-        </div>
-        <button
-          onClick={() => url.trim() && handleGo()}
-          className="btn-download-main"
-          disabled={!url.trim() || isDownloading}
-        >
-          ⬇ Download
-        </button>
-      </footer>
-
-      {/* Video Popup */}
-      <VideoPopup
-        isOpen={showPopup}
-        onClose={handleClosePopup}
-        onDownload={handleDownload}
-        onBrowse={handleBrowse}
-        videoInfo={videoInfo}
-        outputPath={outputPath}
-        onOutputPathChange={setOutputPath}
-        isLoading={isLoading}
-        isDownloading={isDownloading}
-        progress={progress}
-        error={error || downloadError}
-        downloadMode={downloadMode}
-        url={url}
-      />
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="popup-overlay" onClick={() => setShowSettings(false)}>
-          <div
-            className="popup-modal settings-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="popup-header">
-              <h2>Settings</h2>
-              <button
-                className="btn-close"
-                onClick={() => setShowSettings(false)}
-              >
-                ×
-              </button>
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto flex flex-col items-center w-full">
+        {activeTab === "youtube" && (
+          <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+            {/* Headline */}
+            <div className="pt-8 pb-6 text-center">
+              <h1 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight mb-2">
+                Download Video & Audio
+              </h1>
+              <p className="text-[#9dabb9] text-base">
+                Paste a URL from YouTube, Vimeo, or other supported sites.
+              </p>
             </div>
 
-            <div className="popup-content">
-              <div className="setting-group">
-                <label>Download Location</label>
-                <div className="output-row">
+            {/* URL Input */}
+            <UrlInput
+              url={url}
+              onUrlChange={setUrl}
+              onDownload={handleDownload}
+              isLoading={isLoading}
+              disabled={isDownloading}
+            />
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-8 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* Download Card */}
+            {(videoInfo || isDownloading) && (
+              <DownloadCard
+                videoInfo={videoInfo}
+                progress={progress}
+                isDownloading={isDownloading}
+                onCancel={handleCancel}
+              />
+            )}
+
+            {/* Recent Downloads */}
+            <RecentDownloads
+              downloads={recentDownloads}
+              onViewAll={() => setActiveTab("downloads")}
+            />
+          </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+            <div className="pt-8 pb-6">
+              <h1 className="text-3xl font-bold mb-2">Settings</h1>
+              <p className="text-[#9dabb9]">Configure download options</p>
+            </div>
+
+            <div className="bg-surface-dark rounded-xl p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium mb-2">Download Location</label>
+                <div className="flex gap-3">
                   <input
                     type="text"
                     value={outputPath}
                     onChange={(e) => setOutputPath(e.target.value)}
-                    className="path-input"
+                    className="flex-1 bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="/path/to/downloads"
                   />
-                  <button onClick={handleBrowse} className="btn-browse">
-                    📁
+                  <button className="px-4 py-3 bg-[#111418] border border-[#283039] rounded-lg hover:bg-[#283039] transition-colors">
+                    <span className="material-symbols-outlined">folder_open</span>
                   </button>
                 </div>
               </div>
 
-              <div className="setting-group">
-                <label>Filename Format</label>
+              <div>
+                <label className="block text-sm font-medium mb-2">Filename Template</label>
                 <select
                   value={settings.filename_template}
-                  onChange={(e) =>
-                    updateSettings({ filename_template: e.target.value })
-                  }
-                  className="settings-select"
+                  className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="%(uploader)s/%(title)s.%(ext)s">
-                    Channel Folder / Title
-                  </option>
+                  <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
                   <option value="%(title)s.%(ext)s">Title Only</option>
-                  <option value="%(upload_date)s - %(title)s.%(ext)s">
-                    Date - Title
-                  </option>
+                  <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
                 </select>
               </div>
-            </div>
 
-            <div className="popup-footer">
               <button
-                onClick={() => setShowSettings(false)}
-                className="btn-cancel"
+                onClick={saveSettings}
+                className="w-full py-3 bg-primary hover:bg-blue-600 rounded-lg font-medium transition-colors"
               >
-                Cancel
-              </button>
-              <button onClick={handleSaveSettings} className="btn-download">
-                Save
+                Save Settings
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {activeTab === "downloads" && (
+          <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+            <div className="pt-8 pb-6">
+              <h1 className="text-3xl font-bold mb-2">Downloads</h1>
+              <p className="text-[#9dabb9]">Your download history</p>
+            </div>
+
+            <RecentDownloads downloads={recentDownloads} />
+          </div>
+        )}
+      </main>
+
+      {/* Bottom Navigation */}
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 }
