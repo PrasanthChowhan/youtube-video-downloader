@@ -1,5 +1,7 @@
 /** TypeScript type definitions matching Rust backend. */
 
+export type Platform = "youtube" | "instagram" | "unknown";
+
 export interface VideoInfo {
     id: string;
     title: string;
@@ -10,6 +12,7 @@ export interface VideoInfo {
     view_count: number | null;
     filesize_approx: number | null;
     url: string;
+    platform: Platform;
 }
 
 export interface DownloadProgress {
@@ -61,6 +64,7 @@ export interface DownloadRecord {
     status: DownloadStatus;
     created_at: number;
     completed_at: number | null;
+    platform: Platform;
 }
 
 /** Download history container */

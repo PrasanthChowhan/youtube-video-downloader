@@ -4,6 +4,7 @@
  */
 
 import type { DownloadRecord } from "../types";
+import { YouTubeIcon, InstagramIcon } from "./PlatformIcons";
 
 interface DownloadHistoryItemProps {
     record: DownloadRecord;
@@ -46,6 +47,27 @@ function formatRelativeTime(timestamp: number): string {
     return new Date(timestamp * 1000).toLocaleDateString();
 }
 
+/**
+ * Get platform icon component
+ */
+function PlatformBadge({ platform }: { platform: string }) {
+    if (platform === "youtube") {
+        return (
+            <div className="absolute bottom-1 right-1 p-1 bg-red-600 rounded" title="YouTube">
+                <YouTubeIcon size={12} className="text-white" />
+            </div>
+        );
+    }
+    if (platform === "instagram") {
+        return (
+            <div className="absolute bottom-1 right-1 p-1 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded" title="Instagram">
+                <InstagramIcon size={12} className="text-white" />
+            </div>
+        );
+    }
+    return null;
+}
+
 export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
     record,
     onOpenFile,
@@ -72,6 +94,9 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                         <span className="material-symbols-outlined">movie</span>
                     </div>
                 )}
+
+                {/* Platform badge */}
+                <PlatformBadge platform={record.platform || "youtube"} />
 
                 {/* Status badge */}
                 {isDisabled && (

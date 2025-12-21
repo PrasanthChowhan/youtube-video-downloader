@@ -590,6 +590,7 @@ async fn process_next_queue_item(
                                     status: HistoryStatus::Completed,
                                     created_at: chrono::Utc::now().timestamp(),
                                     completed_at: Some(chrono::Utc::now().timestamp()),
+                                    platform: downloader::detect_platform(&url).to_string().to_lowercase(),
                                 };
                                 let _ = download_history::add_record(record);
                                 
@@ -1011,6 +1012,7 @@ async fn run_download_task(
                                             status: HistoryStatus::Completed,
                                             created_at: chrono::Utc::now().timestamp(),
                                             completed_at: Some(chrono::Utc::now().timestamp()),
+                                            platform: downloader::detect_platform(&url).to_string().to_lowercase(),
                                         };
                                         let _ = download_history::add_record(record);
                                         let _ = app.emit("history-updated", ());

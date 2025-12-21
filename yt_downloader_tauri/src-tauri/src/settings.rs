@@ -17,7 +17,8 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             download_path: get_default_download_dir().to_string_lossy().to_string(),
-            filename_template: "%(uploader)s/%(title)s.%(ext)s".to_string(),
+            // Include %(id)s for uniqueness (especially for Instagram which has generic titles)
+            filename_template: "%(uploader)s/%(title)s [%(id)s].%(ext)s".to_string(),
             theme: "dark".to_string(),
         }
     }

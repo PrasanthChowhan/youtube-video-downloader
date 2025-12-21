@@ -5,7 +5,7 @@ pub mod types;
 pub mod youtube;
 
 pub use formats::{format_bytes, format_eta, format_speed};
-pub use types::{DownloadProgress, VideoInfo};
+pub use types::{detect_platform, DownloadProgress, Platform, VideoInfo};
 pub use youtube::clean_youtube_url;
 
 use std::path::PathBuf;
@@ -24,9 +24,16 @@ pub fn get_download_dir() -> PathBuf {
     }
 }
 
-/// Fetches video information from a YouTube URL.
+
+/// Fetches video information from a URL (YouTube or Instagram).
 pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, String> {
-    let cleaned_url = clean_youtube_url(url);
+    let platform = detect_platform(url);
+    
+    // Clean URL based on platform
+    let cleaned_url = match platform {
+        Platform::YouTube => clean_youtube_url(url),
+        _ => url.to_string(),
+    };
 
     let command = app
         .shell()
@@ -48,9 +55,26 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
     let json: serde_json::Value =
         serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse yt-dlp output: {}", e))?;
 
+    // For Instagram, use the first line of description as title (this is how IG captions work)
+    let title = if platform == Platform::Instagram {
+        let description = json["description"].as_str().unwrap_or("");
+        // Get the first line (before any newline) - this is typically the "title" part of an IG caption
+        let first_line = description.lines().next().unwrap_or("");
+        if !first_line.is_empty() && first_line.len() > 5 {
+            // Truncate to 80 chars max for filename safety
+            let truncated: String = first_line.chars().take(80).collect();
+            truncated.trim().to_string()
+        } else {
+            // Fallback to yt-dlp title if description is empty
+            json["title"].as_str().unwrap_or("Unknown").to_string()
+        }
+    } else {
+        json["title"].as_str().unwrap_or("Unknown").to_string()
+    };
+
     Ok(VideoInfo {
         id: json["id"].as_str().unwrap_or("").to_string(),
-        title: json["title"].as_str().unwrap_or("Unknown").to_string(),
+        title,
         uploader: json["uploader"].as_str().unwrap_or("Unknown").to_string(),
         duration: json["duration"].as_u64().unwrap_or(0),
         duration_string: json["duration_string"].as_str().unwrap_or("0:00").to_string(),
@@ -58,6 +82,7 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
         view_count: json["view_count"].as_u64(),
         filesize_approx: json["filesize_approx"].as_u64(),
         url: url.to_string(),
+        platform,
     })
 }
 
@@ -137,6 +162,9 @@ pub async fn download_video_with_child(
 
     let output_template = output_dir.join(filename_template).to_string_lossy().to_string();
 
+    // Detect platform for Instagram-specific handling
+    let platform = detect_platform(url);
+
     // Prefer mp4/m4a formats for maximum compatibility (h264 video, aac audio)
     // Fall back to best available if preferred formats unavailable
     let mut args = vec![
@@ -148,6 +176,16 @@ pub async fn download_video_with_child(
         "--progress-template".to_string(),
         "download:%(progress.percent)s|%(progress.speed)s|%(progress.eta)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
+
+    // For Instagram, override title with first line of description (caption)
+    // This makes the filename match what users see in the app
+    if platform == Platform::Instagram {
+        // --parse-metadata: extract first line before any newline from description as title
+        args.extend([
+            "--parse-metadata".to_string(),
+            "description:(?s)(?P<title>[^\\n]+)".to_string(),
+        ]);
+    }
 
     if use_aria2c {
         // Use high connection count for aria2c speed boost

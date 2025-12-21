@@ -29,11 +29,23 @@ pub struct DownloadRecord {
     pub status: DownloadStatus,
     pub created_at: i64,
     pub completed_at: Option<i64>,
+    #[serde(default = "default_platform")]
+    pub platform: String,
+}
+
+fn default_platform() -> String {
+    "youtube".to_string()
 }
 
 impl DownloadRecord {
     /// Create a new download record
-    pub fn new(url: String, title: String, uploader: String, thumbnail: Option<String>) -> Self {
+    pub fn new(
+        url: String,
+        title: String,
+        uploader: String,
+        thumbnail: Option<String>,
+        platform: String,
+    ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             url,
@@ -45,6 +57,7 @@ impl DownloadRecord {
             status: DownloadStatus::Completed, // Will be set properly when completed
             created_at: chrono::Utc::now().timestamp(),
             completed_at: None,
+            platform,
         }
     }
 }
