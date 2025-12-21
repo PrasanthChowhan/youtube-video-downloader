@@ -3,6 +3,8 @@
  * Displays a single download record with actions
  */
 
+import { useState, useMemo } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DownloadRecord } from "../types";
 import { YouTubeIcon, InstagramIcon } from "./PlatformIcons";
 
@@ -75,6 +77,18 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
     onDelete,
 }) => {
     const isDisabled = record.status === "cancelled" || record.status === "failed" || record.status === "file_not_found";
+    const [imageError, setImageError] = useState(false);
+
+    // Convert local file paths to Tauri asset URLs
+    const thumbnailSrc = useMemo(() => {
+        if (!record.thumbnail) return null;
+        // If it's a local file path (starts with drive letter or /), convert it
+        if (record.thumbnail.match(/^[A-Za-z]:\\/) || record.thumbnail.startsWith("/")) {
+            return convertFileSrc(record.thumbnail);
+        }
+        // Otherwise, it's a URL - use as-is
+        return record.thumbnail;
+    }, [record.thumbnail]);
 
     return (
         <div
@@ -83,11 +97,12 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
         >
             {/* Thumbnail */}
             <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-[#111418] shrink-0">
-                {record.thumbnail ? (
+                {thumbnailSrc && !imageError ? (
                     <img
-                        src={record.thumbnail}
+                        src={thumbnailSrc}
                         alt={record.title}
                         className="w-full h-full object-cover"
+                        onError={() => setImageError(true)}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-[#637588]">

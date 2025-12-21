@@ -12,6 +12,7 @@ mod download_queue;
 mod downloader;
 mod response;
 mod settings;
+mod thumbnail_cache;
 
 use acceleration_config::AccelerationConfig;
 use download_history::{DownloadHistory, DownloadRecord, DownloadStatus as HistoryStatus};
@@ -579,12 +580,15 @@ async fn process_next_queue_item(
                                 queue.update_status(&item_id, QueueStatus::Completed, None);
                                 
                                 // Add to download history
+                                // Cache thumbnail locally for persistence
+                                let cached_thumbnail = thumbnail_cache::cache_thumbnail_sync(&thumbnail, &title);
+                                
                                 let record = DownloadRecord {
                                     id: uuid::Uuid::new_v4().to_string(),
                                     url: url.clone(),
                                     title: title.clone(),
                                     uploader: uploader.clone(),
-                                    thumbnail: thumbnail.clone(),
+                                    thumbnail: cached_thumbnail,
                                     file_path: last_filename.clone(),
                                     file_size: total_bytes.or(filesize),
                                     status: HistoryStatus::Completed,
@@ -1001,12 +1005,15 @@ async fn run_download_task(
                                         manager.update_status(&item_id, DownloadStatus::Completed, None);
                                         
                                         // Add to history
+                                        // Cache thumbnail locally for persistence
+                                        let cached_thumbnail = thumbnail_cache::cache_thumbnail_sync(&item.thumbnail, &item.title);
+                                        
                                         let record = DownloadRecord {
                                             id: uuid::Uuid::new_v4().to_string(),
                                             url: url.clone(),
                                             title: item.title.clone(),
                                             uploader: item.uploader.clone(),
-                                            thumbnail: item.thumbnail.clone(),
+                                            thumbnail: cached_thumbnail,
                                             file_path: last_filename.clone(),
                                             file_size: total_bytes.or(item.filesize_approx),
                                             status: HistoryStatus::Completed,

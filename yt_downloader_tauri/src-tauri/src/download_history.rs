@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::thumbnail_cache;
+
 /// Status of a download record
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -124,17 +126,29 @@ pub fn update_record(id: &str, updater: impl FnOnce(&mut DownloadRecord)) -> Res
 pub fn delete_record(id: &str) -> Result<(), String> {
     let mut history = load_history();
     let initial_len = history.records.len();
+
+    // Find and remove the record, capturing thumbnail path for cleanup
+    let removed_thumbnail: Option<String> = history
+        .records
+        .iter()
+        .find(|r| r.id == id)
+        .and_then(|r| r.thumbnail.clone());
+
     history.records.retain(|r| r.id != id);
 
     if history.records.len() == initial_len {
         Err(format!("Record not found: {}", id))
     } else {
+        // Delete cached thumbnail
+        thumbnail_cache::delete_thumbnail(&removed_thumbnail);
         save_history(&history)
     }
 }
 
 /// Clear all history
 pub fn clear_all() -> Result<(), String> {
+    // Clear all cached thumbnails
+    thumbnail_cache::clear_cache();
     save_history(&DownloadHistory::default())
 }
 
