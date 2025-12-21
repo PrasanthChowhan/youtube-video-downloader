@@ -8,7 +8,8 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useSettings, useDownloadHistory, useDownloadManager } from "./hooks";
+import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
+import type { ThemeOption } from "./hooks";
 import { UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem } from "./components";
 import type { AccelerationConfig, CommandResponse, Platform } from "./types";
 import "./App.css";
@@ -36,6 +37,7 @@ function App() {
   // Hooks
   const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
   const { records, isLoading: historyLoading, fetchHistory, deleteRecord, clearHistory, openFile, openInFolder } = useDownloadHistory();
+  const { theme, setTheme } = useTheme();
 
   // Download manager with concurrent downloads
   const {
@@ -124,7 +126,16 @@ function App() {
   }, [saveSettings, handleSaveAccelConfig]);
 
   return (
-    <div className="container mx-auto h-screen flex flex-col bg-background text-white selection:bg-primary/30">
+    <div className="container mx-auto h-screen flex flex-col bg-transparent text-[var(--color-text-primary)] selection:bg-primary/30">
+      {/* Animated Background */}
+      <div className="animated-bg">
+        <div className="floating-orb"></div>
+        <div className="floating-orb"></div>
+        <div className="floating-orb"></div>
+        <div className="floating-orb"></div>
+        <div className="floating-orb"></div>
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
 
 
@@ -135,10 +146,10 @@ function App() {
             <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
               {/* Headline */}
               <div className="pt-8 pb-6 text-center">
-                <h1 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight mb-2">
+                <h1 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight mb-2 text-[var(--color-text-primary)]">
                   Download Video & Audio
                 </h1>
-                <p className="text-[#9dabb9] text-base">
+                <p className="text-[var(--color-text-secondary)] text-base">
                   Paste a URL from YouTube, Vimeo, or other supported sites.
                 </p>
               </div>
@@ -162,7 +173,7 @@ function App() {
 
               {/* Empty state when no downloads */}
               {managerQueue.length === 0 && (
-                <div className="flex-1 flex flex-col items-center justify-center text-[#637588] py-16">
+                <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
                   <span className="material-symbols-outlined text-6xl mb-4 opacity-30">download</span>
                   <p className="text-sm">Your downloads will appear here</p>
                 </div>
@@ -173,7 +184,7 @@ function App() {
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-semibold">Download Queue</h3>
+                      <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">Download Queue</h3>
                       {downloadingCount > 0 && (
                         <span className="px-2 py-0.5 text-xs rounded-full bg-blue-500/20 text-blue-400">
                           {downloadingCount} downloading
@@ -208,31 +219,57 @@ function App() {
           {activeTab === "settings" && (
             <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
               <div className="pt-8 pb-6">
-                <h1 className="text-3xl font-bold mb-2">Settings</h1>
-                <p className="text-[#9dabb9]">Configure download options</p>
+                <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Settings</h1>
+                <p className="text-[var(--color-text-secondary)]">Configure download options</p>
+              </div>
+
+              {/* Appearance Settings */}
+              <div className="glass-card p-6 mb-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[var(--color-text-primary)]">
+                  <span className="material-symbols-outlined text-primary">palette</span>
+                  Appearance
+                </h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-[var(--color-text-secondary)]">Theme</label>
+                    <select
+                      value={theme}
+                      onChange={(e) => setTheme(e.target.value as ThemeOption)}
+                      className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                    >
+                      <option value="system">Default (System)</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
+                      Choose your preferred color theme or follow system settings
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* General Settings */}
-              <div className="bg-surface-dark rounded-xl p-6 mb-6">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <div className="glass-card p-6 mb-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[var(--color-text-primary)]">
                   <span className="material-symbols-outlined text-primary">folder</span>
                   General
                 </h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-[#9dabb9]">Download Location</label>
+                    <label className="block text-sm font-medium mb-2 text-[var(--color-text-secondary)]">Download Location</label>
                     <div className="flex gap-3">
                       <input
                         type="text"
                         value={outputPath}
                         onChange={(e) => setOutputPath(e.target.value)}
-                        className="flex-1 bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="flex-1 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                         placeholder="/path/to/downloads"
                       />
                       <button
                         onClick={handleBrowse}
-                        className="px-4 py-3 bg-[#111418] border border-[#283039] rounded-lg hover:bg-[#283039] transition-colors"
+                        className="px-4 py-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-surface-elevated)] transition-colors text-[var(--color-text-primary)]"
                       >
                         <span className="material-symbols-outlined">folder_open</span>
                       </button>
@@ -240,12 +277,11 @@ function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-[#9dabb9]">Filename Template</label>
+                    <label className="block text-sm font-medium mb-2 text-[var(--color-text-secondary)]">Filename Template</label>
                     <select
                       value={settings.filename_template}
                       onChange={(e) => updateSettings({ filename_template: e.target.value })}
-                      className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-
+                      className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                     >
                       <option value="%(uploader)s/%(title)s.%(ext)s">Channel Folder / Title</option>
                       <option value="%(title)s.%(ext)s">Title Only</option>
@@ -256,20 +292,20 @@ function App() {
               </div>
 
               {/* Download Booster Settings */}
-              <div className="bg-surface-dark rounded-xl p-6 mb-6">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <div className="glass-card p-6 mb-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[var(--color-text-primary)]">
                   <span className="material-symbols-outlined text-primary">bolt</span>
                   Download Booster
                   <div className="relative group flex items-center ml-1">
-                    <span className="material-symbols-outlined text-[#5c6b7f] hover:text-primary transition-colors text-lg cursor-help">info</span>
+                    <span className="material-symbols-outlined text-[var(--color-text-muted)] hover:text-primary transition-colors text-lg cursor-help">info</span>
 
                     {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-4 bg-[#1e2329] border border-[#283039] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out transform translate-y-1 group-hover:translate-y-0 z-50">
-                      <div className="font-bold text-white mb-2 text-sm flex items-center gap-2">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-4 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out transform translate-y-1 group-hover:translate-y-0 z-50">
+                      <div className="font-bold text-[var(--color-text-primary)] mb-2 text-sm flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary text-sm">rocket_launch</span>
                         Optimization Guide
                       </div>
-                      <div className="space-y-2 text-xs text-[#9dabb9]">
+                      <div className="space-y-2 text-xs text-[var(--color-text-secondary)]">
                         <div className="flex justify-between">
                           <span className="text-primary font-medium">Fragments:</span>
                           <span className="text-right"><b>16</b> (Safe) — <b>32</b> (Fastest)</span>
@@ -278,12 +314,12 @@ function App() {
                           <span className="text-primary font-medium">Split Size:</span>
                           <span className="text-right"><b>1M</b> (Default) — <b>5M</b> (4K+)</span>
                         </div>
-                        <div className="pt-2 border-t border-[#283039] mt-2 italic text-[#5c6b7f]">
+                        <div className="pt-2 border-t border-[var(--color-border)] mt-2 italic text-[var(--color-text-muted)]">
                           Use 16 connections to avoid YouTube temporary IP bans.
                         </div>
                       </div>
                       {/* Arrow */}
-                      <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#283039]"></div>
+                      <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[var(--color-border)]"></div>
                     </div>
                   </div>
                 </h2>
@@ -291,37 +327,37 @@ function App() {
                 <div className="space-y-4">
                   {/* Enable toggle */}
                   <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm">Enable Speed Boost</span>
+                    <span className="text-sm text-[var(--color-text-primary)]">Enable Speed Boost</span>
                     <input
                       type="checkbox"
                       checked={accelConfig.enabled}
                       onChange={(e) => setAccelConfig({ ...accelConfig, enabled: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
 
                   {/* Use aria2c */}
                   <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm">Use aria2c (faster downloads)</span>
+                    <span className="text-sm text-[var(--color-text-primary)]">Use aria2c (faster downloads)</span>
                     <input
                       type="checkbox"
                       checked={accelConfig.use_aria2c}
                       onChange={(e) => setAccelConfig({ ...accelConfig, use_aria2c: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
 
                   {/* Smart Mode */}
-                  <label className="flex items-center justify-between cursor-pointer p-3 bg-[#1e2329] border border-[#283039] rounded-lg">
+                  <label className="flex items-center justify-between cursor-pointer p-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg">
                     <div>
-                      <span className="block text-sm font-medium text-white">Smart Mode</span>
+                      <span className="block text-sm font-medium text-[var(--color-text-primary)]">Smart Mode</span>
                       <span className="block text-xs text-primary mt-0.5">Auto-optimizes for speed & large files</span>
                     </div>
                     <input
                       type="checkbox"
                       checked={accelConfig.smart_mode}
                       onChange={(e) => setAccelConfig({ ...accelConfig, smart_mode: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
 
@@ -330,8 +366,8 @@ function App() {
                       {/* Concurrent Fragments */}
                       <div>
                         <div className="flex justify-between mb-2">
-                          <label className="text-sm text-[#9dabb9]">Concurrent Fragments</label>
-                          <span className="text-sm font-medium">{accelConfig.max_concurrent_fragments}</span>
+                          <label className="text-sm text-[var(--color-text-secondary)]">Concurrent Fragments</label>
+                          <span className="text-sm font-medium text-[var(--color-text-primary)]">{accelConfig.max_concurrent_fragments}</span>
                         </div>
                         <input
                           type="range"
@@ -340,9 +376,9 @@ function App() {
                           step="1"
                           value={accelConfig.max_concurrent_fragments}
                           onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
-                          className="w-full h-2 bg-[#111418] rounded-lg appearance-none cursor-pointer accent-primary"
+                          className="w-full h-2 bg-[var(--color-surface-muted)] rounded-lg appearance-none cursor-pointer accent-primary"
                         />
-                        <div className="flex justify-between text-xs text-[#9dabb9] mt-1">
+                        <div className="flex justify-between text-xs text-[var(--color-text-muted)] mt-1">
                           <span>1</span>
                           <span>32</span>
                         </div>
@@ -350,12 +386,12 @@ function App() {
 
                       {/* Min Split Size */}
                       <div>
-                        <label className="block text-sm text-[#9dabb9] mb-2">Aria2 Min Split Size (e.g. 1M)</label>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2">Aria2 Min Split Size (e.g. 1M)</label>
                         <input
                           type="text"
                           value={accelConfig.aria2_min_split_size || "1M"}
                           onChange={(e) => setAccelConfig({ ...accelConfig, aria2_min_split_size: e.target.value })}
-                          className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                          className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                           placeholder="1M"
                         />
                       </div>
@@ -364,25 +400,25 @@ function App() {
 
                   {/* Min File Size */}
                   <div>
-                    <label className="block text-sm text-[#9dabb9] mb-2">Min File Size for Boost (MB)</label>
+                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">Min File Size for Boost (MB)</label>
                     <input
                       type="number"
                       min="1"
                       max="100"
                       value={accelConfig.min_file_size_mb}
                       onChange={(e) => setAccelConfig({ ...accelConfig, min_file_size_mb: parseInt(e.target.value) || 10 })}
-                      className="w-full bg-[#111418] border border-[#283039] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                     />
                   </div>
 
                   {/* Throttle Protection */}
                   <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm">Throttle Protection (prevents bans)</span>
+                    <span className="text-sm text-[var(--color-text-primary)]">Throttle Protection (prevents bans)</span>
                     <input
                       type="checkbox"
                       checked={accelConfig.use_throttle_protection}
                       onChange={(e) => setAccelConfig({ ...accelConfig, use_throttle_protection: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[#111418] border-[#283039] text-primary focus:ring-primary focus:ring-offset-0"
+                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
                     />
                   </label>
                 </div>
@@ -391,7 +427,7 @@ function App() {
               {/* Save Button */}
               <button
                 onClick={handleSaveAll}
-                className="w-full py-3 bg-primary hover:bg-blue-600 rounded-lg font-medium transition-colors"
+                className="w-full py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] rounded-lg font-medium transition-colors"
               >
                 Save Settings
               </button>
@@ -402,13 +438,13 @@ function App() {
             <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
               <div className="pt-8 pb-6 flex items-center justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2">Downloads</h1>
-                  <p className="text-[#9dabb9]">Your download history</p>
+                  <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Downloads</h1>
+                  <p className="text-[var(--color-text-secondary)]">Your download history</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={fetchHistory}
-                    className="p-2 text-[#9dabb9] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                    className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     title="Refresh"
                   >
                     <span className="material-symbols-outlined">refresh</span>
@@ -416,7 +452,7 @@ function App() {
                   {records.length > 0 && (
                     <button
                       onClick={clearHistory}
-                      className="p-2 text-[#9dabb9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      className="p-2 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                       title="Clear all history"
                     >
                       <span className="material-symbols-outlined">delete_sweep</span>
@@ -430,8 +466,8 @@ function App() {
                 <button
                   onClick={() => setPlatformFilter("all")}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${platformFilter === "all"
-                    ? "bg-primary text-white"
-                    : "bg-[#1e2329] text-[#9dabb9] hover:bg-[#283039]"
+                    ? "bg-primary text-[var(--color-text-on-accent)]"
+                    : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
                     }`}
                 >
                   All
@@ -440,7 +476,7 @@ function App() {
                   onClick={() => setPlatformFilter("youtube")}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${platformFilter === "youtube"
                     ? "bg-red-600 text-white"
-                    : "bg-[#1e2329] text-[#9dabb9] hover:bg-[#283039]"
+                    : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
                     }`}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -452,7 +488,7 @@ function App() {
                   onClick={() => setPlatformFilter("instagram")}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${platformFilter === "instagram"
                     ? "bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 text-white"
-                    : "bg-[#1e2329] text-[#9dabb9] hover:bg-[#283039]"
+                    : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
                     }`}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -467,7 +503,7 @@ function App() {
                   <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
                 </div>
               ) : records.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-[#637588] py-16">
+                <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
                   <span className="material-symbols-outlined text-6xl mb-4 opacity-30">folder_open</span>
                   <p className="text-sm">No downloads yet</p>
                 </div>

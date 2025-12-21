@@ -74,11 +74,11 @@ export const QueueItemComponent: React.FC<QueueItemProps> = ({
 
     return (
         <div
-            className={`flex items-center gap-4 p-3 rounded-lg border border-white/5 bg-[#1a1f2e] hover:bg-[#1f2537] transition-colors group ${isDisabled ? "opacity-60" : ""
+            className={`flex items-center gap-4 p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-colors group ${isDisabled ? "opacity-60" : ""
                 }`}
         >
             {/* Thumbnail */}
-            <div className="relative w-20 h-12 rounded overflow-hidden flex-shrink-0 bg-[#0d1117]">
+            <div className="relative w-20 h-12 rounded overflow-hidden flex-shrink-0 bg-[var(--color-surface-muted)]">
                 {item.thumbnail ? (
                     <img
                         src={item.thumbnail}
@@ -86,8 +86,8 @@ export const QueueItemComponent: React.FC<QueueItemProps> = ({
                         className="w-full h-full object-cover"
                     />
                 ) : (
-                    <div className={`w-full h-full flex items-center justify-center ${item.status === 'fetching_metadata' ? 'animate-pulse bg-[#161b22]' : ''}`}>
-                        <span className="material-symbols-outlined text-2xl text-gray-600">movie</span>
+                    <div className={`w-full h-full flex items-center justify-center ${item.status === 'fetching_metadata' ? 'animate-pulse' : ''}`}>
+                        <span className="material-symbols-outlined text-2xl text-[var(--color-text-muted)]">movie</span>
                     </div>
                 )}
                 {/* Progress overlay when downloading */}
@@ -101,19 +101,19 @@ export const QueueItemComponent: React.FC<QueueItemProps> = ({
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-medium text-white truncate">{item.title}</h4>
+                <h4 className="text-sm font-medium text-[var(--color-text-primary)] truncate">{item.title}</h4>
                 <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-[#9dabb9] truncate">{item.uploader}</span>
+                    <span className="text-xs text-[var(--color-text-muted)] truncate">{item.uploader}</span>
                     {item.duration_string && (
                         <>
-                            <span className="text-[#9dabb9]">•</span>
-                            <span className="text-xs text-[#9dabb9]">{item.duration_string}</span>
+                            <span className="text-[var(--color-text-muted)]">•</span>
+                            <span className="text-xs text-[var(--color-text-muted)]">{item.duration_string}</span>
                         </>
                     )}
                     {item.filesize_approx && (
                         <>
-                            <span className="text-[#9dabb9]">•</span>
-                            <span className="text-xs text-[#9dabb9]">{formatBytes(item.filesize_approx)}</span>
+                            <span className="text-[var(--color-text-muted)]">•</span>
+                            <span className="text-xs text-[var(--color-text-muted)]">{formatBytes(item.filesize_approx)}</span>
                         </>
                     )}
                 </div>
@@ -130,7 +130,7 @@ export const QueueItemComponent: React.FC<QueueItemProps> = ({
             {/* Remove button - for queued, fetching, or completed/failed items */}
             <button
                 onClick={() => onRemove(item.id)}
-                className="flex-shrink-0 p-1.5 text-[#9dabb9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                className="flex-shrink-0 p-1.5 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                 title="Remove from queue"
             >
                 <span className="material-symbols-outlined text-lg">close</span>

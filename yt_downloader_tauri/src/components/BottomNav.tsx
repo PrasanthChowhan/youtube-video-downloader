@@ -15,7 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
     ];
 
     return (
-        <nav className="flex-none border-t border-[#283039] bg-[#111418] px-10 pb-6 pt-3 z-20">
+        <nav className="flex-none border-t border-[var(--color-border)] bg-[var(--color-surface)] backdrop-blur-xl px-10 pb-6 pt-3 z-20">
             <div className="flex justify-center items-center gap-16 max-w-[400px] mx-auto">
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
@@ -24,11 +24,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
                             key={tab.id}
                             onClick={() => onTabChange(tab.id)}
                             className={`group flex flex-col items-center gap-1.5 w-16 relative transition-colors ${isActive
-                                    ? "text-primary"
-                                    : "text-[#9dabb9] hover:text-white"
+                                ? "text-primary"
+                                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
                                 }`}
                         >
-                            <div className={`p-1 rounded-full transition-colors ${isActive ? "bg-primary/10" : "group-hover:bg-white/10"
+                            <div className={`p-1 rounded-full transition-colors ${isActive ? "bg-primary/10" : "group-hover:bg-[var(--color-accent-soft)]"
                                 }`}>
                                 <span className="material-symbols-outlined">{tab.icon}</span>
                             </div>

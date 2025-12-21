@@ -92,11 +92,11 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
 
     return (
         <div
-            className={`group flex items-center gap-4 p-4 rounded-xl border border-[#283039] bg-surface-dark/50 transition-all hover:border-primary/30 ${isDisabled ? "opacity-50" : ""
+            className={`group flex items-center gap-4 p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] transition-all hover:border-primary/30 ${isDisabled ? "opacity-50" : ""
                 }`}
         >
             {/* Thumbnail */}
-            <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-[#111418] shrink-0">
+            <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-[var(--color-surface-muted)] shrink-0">
                 {thumbnailSrc && !imageError ? (
                     <img
                         src={thumbnailSrc}
@@ -105,7 +105,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                         onError={() => setImageError(true)}
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#637588]">
+                    <div className="w-full h-full flex items-center justify-center text-[var(--color-text-muted)]">
                         <span className="material-symbols-outlined">movie</span>
                     </div>
                 )}
@@ -116,7 +116,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                 {/* Status badge */}
                 {isDisabled && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <span className="text-xs font-medium text-[#9dabb9] capitalize">
+                        <span className="text-xs font-medium text-[var(--color-text-secondary)] capitalize">
                             {record.status === "file_not_found" ? "File deleted" : record.status}
                         </span>
                     </div>
@@ -125,13 +125,13 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-                <h4 className={`font-medium text-sm truncate ${isDisabled ? "text-[#637588]" : "text-white"}`}>
+                <h4 className={`font-medium text-sm truncate ${isDisabled ? "text-[var(--color-text-muted)]" : "text-[var(--color-text-primary)]"}`}>
                     {record.title}
                 </h4>
-                <p className="text-xs text-[#637588] truncate">
+                <p className="text-xs text-[var(--color-text-muted)] truncate">
                     {record.uploader}
                 </p>
-                <p className="text-xs text-[#5c6b7f] mt-1">
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
                     {formatBytes(record.file_size)} • {formatRelativeTime(record.created_at)}
                 </p>
             </div>
@@ -142,7 +142,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                 {record.file_path && record.status === "completed" && onOpenFile && (
                     <button
                         onClick={() => onOpenFile(record.file_path!)}
-                        className="p-2 text-[#9dabb9] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                        className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                         title="Open file"
                     >
                         <span className="material-symbols-outlined text-[20px]">play_circle</span>
@@ -153,7 +153,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                 {record.file_path && record.status === "completed" && onOpenFolder && (
                     <button
                         onClick={() => onOpenFolder(record.file_path!)}
-                        className="p-2 text-[#9dabb9] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                        className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                         title="Open in folder"
                     >
                         <span className="material-symbols-outlined text-[20px]">folder_open</span>
@@ -164,7 +164,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                 {onDelete && (
                     <button
                         onClick={() => onDelete(record.id)}
-                        className="p-2 text-[#9dabb9] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        className="p-2 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Remove from history"
                     >
                         <span className="material-symbols-outlined text-[20px]">delete</span>

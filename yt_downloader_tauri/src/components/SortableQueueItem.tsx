@@ -48,7 +48,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
             case "completed": return "check_circle";
             case "failed": return "error";
             case "cancelled": return "cancel";
-            case "fetching_metadata": return "downloading"; // Use downloading icon or spinner logic if possible, but icon is fine
+            case "fetching_metadata": return "downloading";
             default: return "schedule";
         }
     };
@@ -65,7 +65,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
         <div
             ref={setNodeRef}
             style={style}
-            className={`flex items-center gap-3 p-3 rounded-xl bg-[#1a2433] border border-white/5 transition-all ${isDragging ? "shadow-xl ring-2 ring-primary/50" : "hover:border-white/10"
+            className={`flex items-center gap-3 p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] transition-all ${isDragging ? "shadow-xl ring-2 ring-primary/50" : "hover:border-[var(--color-border-accent)]"
                 }`}
         >
             {/* Drag Handle - only for queued items */}
@@ -73,7 +73,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                 <div
                     {...attributes}
                     {...listeners}
-                    className="flex-shrink-0 p-1 cursor-grab active:cursor-grabbing text-[#637588] hover:text-white/70 touch-none"
+                    className="flex-shrink-0 p-1 cursor-grab active:cursor-grabbing text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] touch-none"
                 >
                     <span className="material-symbols-outlined text-lg">drag_indicator</span>
                 </div>
@@ -89,17 +89,17 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                     className="w-16 h-9 rounded object-cover flex-shrink-0"
                 />
             ) : (
-                <div className={`w-16 h-9 rounded bg-[#2a3444] flex items-center justify-center flex-shrink-0 ${item.status === 'fetching_metadata' ? 'animate-pulse' : ''}`}>
-                    <span className="material-symbols-outlined text-[#637588]">movie</span>
+                <div className={`w-16 h-9 rounded bg-[var(--color-surface-muted)] flex items-center justify-center flex-shrink-0 ${item.status === 'fetching_metadata' ? 'animate-pulse' : ''}`}>
+                    <span className="material-symbols-outlined text-[var(--color-text-muted)]">movie</span>
                 </div>
             )}
 
             {/* Info */}
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-medium truncate">{item.title}</h4>
+                    <h4 className="text-sm font-medium truncate text-[var(--color-text-primary)]">{item.title}</h4>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-[#637588]">
+                <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
                     <span className="truncate">{item.uploader}</span>
                     {item.duration_string && (
                         <>
@@ -119,17 +119,17 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                 {item.status === "downloading" && (
                     <div className="mt-2">
                         <div className="flex items-center gap-2 text-xs">
-                            <div className="flex-1 h-1.5 bg-[#2a3444] rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-gradient-to-r from-blue-500 to-primary transition-all duration-300"
                                     style={{ width: `${item.progress.percent}%` }}
                                 />
                             </div>
-                            <span className="text-[#9dabb9] w-12 text-right">
+                            <span className="text-[var(--color-text-secondary)] w-12 text-right">
                                 {item.progress.percent.toFixed(0)}%
                             </span>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-[#637588] mt-1">
+                        <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)] mt-1">
                             {item.progress.speed && (
                                 <span>{item.progress.speed}</span>
                             )}
@@ -159,7 +159,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                 {item.status === "downloading" && (
                     <button
                         onClick={() => onCancel(item.id)}
-                        className="p-1.5 text-[#637588] hover:text-orange-400 hover:bg-orange-400/10 rounded-lg transition-colors"
+                        className="p-1.5 text-[var(--color-text-muted)] hover:text-orange-400 hover:bg-orange-400/10 rounded-lg transition-colors"
                         title="Cancel download"
                     >
                         <span className="material-symbols-outlined text-lg">stop</span>
@@ -168,7 +168,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                 {item.status === "queued" && (
                     <button
                         onClick={() => onRemove(item.id)}
-                        className="p-1.5 text-[#637588] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        className="p-1.5 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Remove from queue"
                     >
                         <span className="material-symbols-outlined text-lg">close</span>
@@ -177,7 +177,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                 {item.status === "fetching_metadata" && (
                     <button
                         onClick={() => onRemove(item.id)}
-                        className="p-1.5 text-[#637588] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        className="p-1.5 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Remove from queue"
                     >
                         <span className="material-symbols-outlined text-lg">close</span>

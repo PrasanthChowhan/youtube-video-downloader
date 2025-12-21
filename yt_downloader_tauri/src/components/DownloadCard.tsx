@@ -53,15 +53,15 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
             : 'Fetching...';
 
     return (
-        <div className="bg-surface-dark rounded-xl p-5 mb-8 shadow-sm border border-[#283039]">
+        <div className="glass-card p-5 mb-8">
             <div className="flex items-start gap-4">
                 {/* Thumbnail */}
                 <div
-                    className="w-24 h-16 bg-[#111418] rounded-lg bg-cover bg-center shrink-0 relative overflow-hidden group flex items-center justify-center"
+                    className="w-24 h-16 bg-[var(--color-surface-muted)] rounded-lg bg-cover bg-center shrink-0 relative overflow-hidden group flex items-center justify-center"
                     style={thumbnail ? { backgroundImage: `url('${thumbnail}')` } : {}}
                 >
                     {!thumbnail && (
-                        <span className="material-symbols-outlined text-[#637588] text-3xl">
+                        <span className="material-symbols-outlined text-[var(--color-text-muted)] text-3xl">
                             {url.includes('youtube') || url.includes('youtu.be') ? 'smart_display' : 'download'}
                         </span>
                     )}
@@ -71,13 +71,13 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
                 <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-2">
                         <div>
-                            <h3 className="font-medium text-sm leading-tight truncate pr-4">{title}</h3>
-                            <p className="text-[#9dabb9] text-xs mt-1">{format}</p>
+                            <h3 className="font-medium text-sm leading-tight truncate pr-4 text-[var(--color-text-primary)]">{title}</h3>
+                            <p className="text-[var(--color-text-secondary)] text-xs mt-1">{format}</p>
                         </div>
                         {onCancel && !progress?.status?.includes('finished') && (
                             <button
                                 onClick={onCancel}
-                                className="text-[#9dabb9] hover:text-red-400 transition-colors"
+                                className="text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
                                 title="Cancel download"
                             >
                                 <span className="material-symbols-outlined text-[20px]">close</span>
@@ -88,14 +88,14 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({
                     {/* Progress Bar */}
                     {(isDownloading || progress) && (
                         <>
-                            <div className="relative w-full h-2 bg-[#3b4754] rounded-full overflow-hidden mb-2">
+                            <div className="relative w-full h-2 bg-[var(--color-surface-muted)] rounded-full overflow-hidden mb-2">
                                 <div
                                     className={`absolute top-0 left-0 h-full rounded-full transition-all duration-300 ${progress?.status === 'finished' ? 'bg-green-500' : 'bg-primary'
                                         }`}
                                     style={{ width: `${progress?.percent || 0}%` }}
                                 ></div>
                             </div>
-                            <div className="flex justify-between text-xs text-[#9dabb9]">
+                            <div className="flex justify-between text-xs text-[var(--color-text-secondary)]">
                                 <span className={`font-medium ${progress?.status === 'finished' ? 'text-green-400' : 'text-primary'}`}>
                                     {progress?.status === "finished"
                                         ? "✓ Complete!"
