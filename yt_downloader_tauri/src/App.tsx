@@ -12,11 +12,10 @@ import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
 import type { ThemeOption } from "./hooks";
-import { UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab } from "./components";
 import {
+  UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab,
   DownloadIcon, PaletteIcon, FolderIcon, FolderOpenIcon, FolderSearchIcon, BoltIcon, InfoIcon,
-  RocketLaunchIcon, RefreshIcon, DeleteSweepIcon, SystemUpdateIcon, NewReleasesIcon,
-  SystemUpdateAltIcon, OpenInNewIcon, CheckCircleIcon, ErrorIcon, LoadingIcon
+  RocketLaunchIcon, RefreshIcon, DeleteSweepIcon, LoadingIcon
 } from "./components";
 import type { AccelerationConfig, CommandResponse, Platform, UpdateInfo } from "./types";
 import "./App.css";
