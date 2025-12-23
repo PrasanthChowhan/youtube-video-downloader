@@ -1,0 +1,208 @@
+import React from 'react';
+
+export interface IconProps extends React.SVGProps<SVGSVGElement> {
+    size?: number | string;
+    className?: string;
+}
+
+const IconBase: React.FC<IconProps> = ({ size = 24, className = "", children, ...props }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className={`shrink-0 ${className}`}
+        {...props}
+    >
+        {children}
+    </svg>
+);
+
+// Navigation Icons
+export const SettingsIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+    </IconBase>
+);
+
+export const SmartDisplayIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M20,4H4C2.9,4,2,4.9,2,6v12c0,1.1,0.9,2,2,2h16c1.1,0,2-0.9,2-2V6C22,4.9,21.1,4,20,4z M9.5,15v-6l5.5,3L9.5,15z" />
+    </IconBase>
+);
+
+export const FolderIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M10,4H4C2.9,4,2,4.9,2,6v12c0,1.1,0.9,2,2,2h16c1.1,0,2-0.9,2-2V8c0-1.1-0.9-2-2-2h-8L10,4z" />
+    </IconBase>
+);
+
+export const SystemUpdateIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M17,1.01L7,1C5.9,1,5,1.9,5,3v18c0,1.1,0.9,2,2,2h10c1.1,0,2-0.9,2-2V3C19,1.9,18.1,1.01,17,1.01z M17,19H7V5h10V19z M16,13h-3V8h-2v5H8l4,4L16,13z" />
+    </IconBase>
+);
+
+// General UI Icons
+export const IconLink: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M3.9,12c0-1.71,1.39-3.1,3.1-3.1h4V7H7c-2.76,0-5,2.24-5,5s2.24,5,5,5h4v-1.9H7C5.29,15.1,3.9,13.71,3.9,12z M8,13h8v-2H8V13z M17,7h-4v1.9h4c1.71,0,3.1,1.39,3.1,3.1s-1.39,3.1-3.1,3.1h-4V17h4c2.76,0,5-2.24,5-5S19.76,7,17,7z" />
+    </IconBase>
+);
+
+export const DownloadIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M19,9h-4V3H9v6H5l7,7L19,9z M5,18v2h14v-2H5z" />
+    </IconBase>
+);
+
+export const LoadingIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,4V2C6.48,2,2,6.48,2,12h2C4,7.58,7.58,4,12,4z" />
+    </IconBase>
+);
+
+export const RefreshIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M17.65,6.35C16.2,4.9,14.21,4,12,4c-4.42,0-7.99,3.58-7.99,8s3.57,8,7.99,8c3.73,0,6.84-2.55,7.73-6h-2.08 c-0.82,2.33-3.04,4-5.65,4c-3.31,0-6-2.69-6-6s2.69-6,6-6c1.66,0,3.14,0.69,4.22,1.78L13,11h7V4L17.65,6.35z" />
+    </IconBase>
+);
+
+export const DeleteSweepIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M15,16h4v2h-4V16z M15,8h7v2h-7V8z M15,12h6v2h-6V12z M3,18c0,1.1,0.9,2,2,2h6c1.1,0,2-0.9,2-2V8H3V18z M5,10h6v8H5V10z M10,4H6L5,5H2v2h12V5h-3L10,4z" />
+    </IconBase>
+);
+
+export const PlayCircleIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M10,16.5v-9l6,4.5L10,16.5z" />
+    </IconBase>
+);
+
+export const FolderOpenIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M20,6h-8l-2-2H4C2.9,4,2.01,4.9,2.01,6L2,18c0,1.1,0.9,2,2,2h16c1.1,0,2-0.9,2-2V8C22,6.9,21.1,6,20,6z M20,18H4V8h16V18z" />
+    </IconBase>
+);
+
+export const DeleteIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z" />
+    </IconBase>
+);
+
+export const DragIndicatorIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M11,18c0,1.1-0.9,2-2,2s-2-0.9-2-2s0.9-2,2-2S11,16.9,11,18z M11,10c0,1.1-0.9,2-2,2s-2-0.9-2-2s0.9-2,2-2S11,8.9,11,10z M11,6c0,1.1-0.9,2-2,2S7,7.1,7,6s0.9-2,2-2S11,4.9,11,6z M17,14c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2S15.9,14,17,14z M17,18c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2S15.9,18,17,18z M17,6c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2S15.9,6,17,6z" />
+    </IconBase>
+);
+
+export const MovieIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M18,4l2,4h-3l-2-4h-2l2,4h-3l-2-4H8l2,4H7L5,4H4C2.9,4,2,4.9,2,6v12c0,1.1,0.9,2,2,2h16c1.1,0,2-0.9,2-2V4H18z" />
+    </IconBase>
+);
+
+export const CloseIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" />
+    </IconBase>
+);
+
+export const StopIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M6,6h12v12H6V6z" />
+    </IconBase>
+);
+
+export const CheckCircleIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M10,17l-5-5l1.41-1.41L10,14.17l7.59-7.59L19,8L10,17z" />
+    </IconBase>
+);
+
+export const ErrorIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-2h2V17z M13,13h-2V7h2V13z" />
+    </IconBase>
+);
+
+export const CancelIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,2C6.47,2,2,6.47,2,12s4.47,10,10,10s10-4.47,10-10S17.53,2,12,2z M17,15.59L15.59,17L12,13.41L8.41,17L7,15.59L10.59,12L7,8.41L8.41,7L12,10.59L15.59,7L17,8.41L13.41,12L17,15.59z" />
+    </IconBase>
+);
+
+export const ScheduleIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M11.99,2C6.47,2,2,6.48,2,12s4.47,10,9.99,10C17.52,22,22,17.52,22,12S17.52,2,11.99,2z M12,20c-4.42,0-8-3.58-8-8s3.58-8,8-8s8,3.58,8,8S16.42,20,12,20z M12.5,7H11v6l5.25,3.15l0.75-1.23l-4.5-2.67V7z" />
+    </IconBase>
+);
+
+export const DownloadForOfflineIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M19,9h-4V3H9v6H5l7,7L19,9z M12,18.5c3.59,0,6.5-2.91,6.5-6.5h2c0,4.69-3.81,8.5-8.5,8.5S3.5,16.69,3.5,12h2C5.5,15.59,8.41,18.5,12,18.5z" />
+    </IconBase>
+);
+
+export const PaletteIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9c0.83,0,1.5-0.67,1.5-1.5c0-0.39-0.15-0.74-0.39-1.01c-0.23-0.26-0.38-0.61-0.38-0.99c0-0.83,0.67-1.5,1.5-1.5H16c2.76,0,5-2.24,5-5C21,5.24,16.97,3,12,3z M6.5,12c-0.83,0-1.5-0.67-1.5-1.5S5.67,9,6.5,9S8,9.67,8,10.5S7.33,12,6.5,12z M9.5,8C8.67,8,8,7.33,8,6.5S8.67,5,9.5,5S11,5.67,11,6.5S10.33,8,9.5,8z M14.5,8c-0.83,0-1.5-0.67-1.5-1.5S13.67,5,14.5,5S16,5.67,16,6.5S15.33,8,14.5,8z M17.5,12c-0.83,0-1.5-0.67-1.5-1.5S16.67,9,17.5,9S19,9.67,19,10.5S18.33,12,17.5,12z" />
+    </IconBase>
+);
+
+export const BoltIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M11,21h-1l1-7H7.5c-0.58,0-0.57-0.32-0.38-0.66c0.19-0.35,0.06-0.13,0.07-0.15C8.88,10.42,12.23,3.87,13,2h1l-1,7h3.5c0.66,0,0.59,0.47,0.38,0.83c-0.08,0.13-2.61,5.92-5.88,11.17L11,21z" />
+    </IconBase>
+);
+
+export const RocketLaunchIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M13.13 22.19L11.5 18.36C13.07 17.78 14.54 17 15.9 16.09L13.13 22.19ZM5.64 12.5L1.81 9.87L7.91 7.1C8.82 8.46 9.6 9.93 10.18 11.5L5.64 12.5ZM21.61 2.39C21.61 2.39 16.66 2.14 10.27 8.53L12.16 10.42L11.81 10.77C11.14 11.44 11.14 12.53 11.81 13.2L12.2 13.58L10.42 15.37C10.05 15.74 10.05 16.34 10.42 16.71C10.79 17.08 11.39 17.08 11.76 16.71L13.58 14.89L13.97 15.28C14.64 15.95 15.73 15.95 16.4 15.28L16.75 14.93L18.64 16.82C25.03 10.43 24.78 5.48 24.78 5.48S24.72 2.45 21.61 2.39ZM14.95 9.05C14.26 9.05 13.7 8.49 13.7 7.8C13.7 7.11 14.26 6.55 14.95 6.55C15.64 6.55 16.2 7.11 16.2 7.8C16.2 8.49 15.64 9.05 14.95 9.05Z" />
+    </IconBase>
+);
+
+export const InfoIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M13,17h-2v-6h2V17z M13,9h-2V7h2V9z" />
+    </IconBase>
+);
+
+export const NewReleasesIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M23,12l-2.44-2.79l0.34-3.69l-3.61-0.82L15.4,1.5L12,2.96L8.6,1.5L6.71,4.69L3.1,5.5l0.34,3.69L1,12l2.44,2.79l-0.34,3.69l3.61,0.82L8.6,22.5l3.4-1.47l3.4,1.46l1.89-3.19l3.61-0.82l-0.34-3.69L23,12z M10.09,16.72l-3.8-3.81l1.48-1.48l2.32,2.33l5.85-5.87l1.48,1.48L10.09,16.72z" />
+    </IconBase>
+);
+
+export const SystemUpdateAltIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12,16.5l4-4h-3v-9h-2v9H8L12,16.5z M23,19H1v2h22V19z" />
+    </IconBase>
+);
+
+export const OpenInNewIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M19,19H5V5h7V3H5C3.89,3,3,3.9,3,5v14c0,1.1,0.89,2,2,2h14c1.1,0,2-0.9,2-2v-7h-2V19z M14,3v2h3.59l-9.83,9.83l1.41,1.41L19,6.41V10h2V3H14z" />
+    </IconBase>
+);
+
+export const CheckIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+    </IconBase>
+);
+
+// Platform Icons (Moved from PlatformIcons.tsx)
+export const YouTubeIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </IconBase>
+);
+
+export const InstagramIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.163 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+    </IconBase>
+);

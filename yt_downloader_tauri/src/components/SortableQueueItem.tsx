@@ -5,6 +5,17 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ManagerQueueItem } from "../types";
+import {
+    DragIndicatorIcon,
+    MovieIcon,
+    CloseIcon,
+    StopIcon,
+    DownloadIcon,
+    CheckCircleIcon,
+    ErrorIcon,
+    CancelIcon,
+    ScheduleIcon
+} from "./Icons";
 
 interface SortableQueueItemProps {
     item: ManagerQueueItem;
@@ -44,12 +55,12 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
 
     const getStatusIcon = () => {
         switch (item.status) {
-            case "downloading": return "downloading";
-            case "completed": return "check_circle";
-            case "failed": return "error";
-            case "cancelled": return "cancel";
-            case "fetching_metadata": return "downloading";
-            default: return "schedule";
+            case "downloading": return <DownloadIcon size={16} />;
+            case "completed": return <CheckCircleIcon size={16} />;
+            case "failed": return <ErrorIcon size={16} />;
+            case "cancelled": return <CancelIcon size={16} />;
+            case "fetching_metadata": return <DownloadIcon size={16} />;
+            default: return <ScheduleIcon size={16} />;
         }
     };
 
@@ -75,7 +86,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                     {...listeners}
                     className="flex-shrink-0 p-1 cursor-grab active:cursor-grabbing text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] touch-none"
                 >
-                    <span className="material-symbols-outlined text-lg">drag_indicator</span>
+                    <DragIndicatorIcon size={18} />
                 </div>
             ) : (
                 <div className="flex-shrink-0 p-1 w-[28px]" /> // Placeholder for alignment
@@ -90,7 +101,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                 />
             ) : (
                 <div className={`w-16 h-9 rounded bg-[var(--color-surface-muted)] flex items-center justify-center flex-shrink-0 ${item.status === 'fetching_metadata' ? 'animate-pulse' : ''}`}>
-                    <span className="material-symbols-outlined text-[var(--color-text-muted)]">movie</span>
+                    <MovieIcon size={20} className="text-[var(--color-text-muted)]" />
                 </div>
             )}
 
@@ -150,7 +161,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
 
             {/* Status Badge */}
             <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${getStatusColor()}`}>
-                <span className="material-symbols-outlined text-sm">{getStatusIcon()}</span>
+                {getStatusIcon()}
                 <span className="capitalize hidden sm:inline">{item.status}</span>
             </div>
 
@@ -162,7 +173,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                         className="p-1.5 text-[var(--color-text-muted)] hover:text-orange-400 hover:bg-orange-400/10 rounded-lg transition-colors"
                         title="Cancel download"
                     >
-                        <span className="material-symbols-outlined text-lg">stop</span>
+                        <StopIcon size={18} />
                     </button>
                 )}
                 {item.status === "queued" && (
@@ -171,7 +182,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                         className="p-1.5 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Remove from queue"
                     >
-                        <span className="material-symbols-outlined text-lg">close</span>
+                        <CloseIcon size={18} />
                     </button>
                 )}
                 {item.status === "fetching_metadata" && (
@@ -180,7 +191,7 @@ export function SortableQueueItem({ item, onRemove, onCancel }: SortableQueueIte
                         className="p-1.5 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Remove from queue"
                     >
-                        <span className="material-symbols-outlined text-lg">close</span>
+                        <CloseIcon size={18} />
                     </button>
                 )}
             </div>

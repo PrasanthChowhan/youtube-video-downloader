@@ -6,7 +6,14 @@
 import { useState, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { DownloadRecord } from "../types";
-import { YouTubeIcon, InstagramIcon } from "./PlatformIcons";
+import {
+    YouTubeIcon,
+    InstagramIcon,
+    MovieIcon,
+    PlayCircleIcon,
+    FolderOpenIcon,
+    DeleteIcon
+} from "./Icons";
 
 interface DownloadHistoryItemProps {
     record: DownloadRecord;
@@ -106,7 +113,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-[var(--color-text-muted)]">
-                        <span className="material-symbols-outlined">movie</span>
+                        <MovieIcon size={24} />
                     </div>
                 )}
 
@@ -145,7 +152,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                         className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                         title="Open file"
                     >
-                        <span className="material-symbols-outlined text-[20px]">play_circle</span>
+                        <PlayCircleIcon size={20} />
                     </button>
                 )}
 
@@ -156,7 +163,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                         className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                         title="Open in folder"
                     >
-                        <span className="material-symbols-outlined text-[20px]">folder_open</span>
+                        <FolderOpenIcon size={20} />
                     </button>
                 )}
 
@@ -167,7 +174,7 @@ export const DownloadHistoryItem: React.FC<DownloadHistoryItemProps> = ({
                         className="p-2 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Remove from history"
                     >
-                        <span className="material-symbols-outlined text-[20px]">delete</span>
+                        <DeleteIcon size={20} />
                     </button>
                 )}
             </div>

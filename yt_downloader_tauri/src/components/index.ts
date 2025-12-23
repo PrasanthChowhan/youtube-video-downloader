@@ -7,6 +7,7 @@ export { RecentDownloads } from "./RecentDownloads";
 export { ProgressBar } from "./ProgressBar";
 export { VideoPopup } from "./VideoPopup";
 export { DownloadHistoryItem } from "./DownloadHistoryItem";
-export { YouTubeIcon, InstagramIcon } from "./PlatformIcons";
+export * from "./Icons";
 export { QueueItemComponent } from "./QueueItem";
 export { SortableQueueItem } from "./SortableQueueItem";
+export { UpdateTab } from "./UpdateTab";

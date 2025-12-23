@@ -12,7 +12,12 @@ import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
 import type { ThemeOption } from "./hooks";
-import { UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem } from "./components";
+import { UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab } from "./components";
+import {
+  DownloadIcon, PaletteIcon, FolderIcon, FolderOpenIcon, BoltIcon, InfoIcon,
+  RocketLaunchIcon, RefreshIcon, DeleteSweepIcon, SystemUpdateIcon, NewReleasesIcon,
+  SystemUpdateAltIcon, OpenInNewIcon, CheckCircleIcon, ErrorIcon, LoadingIcon
+} from "./components";
 import type { AccelerationConfig, CommandResponse, Platform, UpdateInfo } from "./types";
 import "./App.css";
 
@@ -284,7 +289,7 @@ function App() {
               {/* Empty state when no downloads */}
               {managerQueue.length === 0 && (
                 <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
-                  <span className="material-symbols-outlined text-6xl mb-4 opacity-30">download</span>
+                  <DownloadIcon size={64} className="mb-4 opacity-30" />
                   <p className="text-sm">Your downloads will appear here</p>
                 </div>
               )}
@@ -336,7 +341,7 @@ function App() {
               {/* Appearance Settings */}
               <div className="glass-card p-6 mb-6">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[var(--color-text-primary)]">
-                  <span className="material-symbols-outlined text-primary">palette</span>
+                  <PaletteIcon className="text-primary" />
                   Appearance
                 </h2>
 
@@ -362,7 +367,7 @@ function App() {
               {/* General Settings */}
               <div className="glass-card p-6 mb-6">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[var(--color-text-primary)]">
-                  <span className="material-symbols-outlined text-primary">folder</span>
+                  <FolderIcon className="text-primary" />
                   General
                 </h2>
 
@@ -381,7 +386,7 @@ function App() {
                         onClick={handleBrowse}
                         className="px-4 py-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-surface-elevated)] transition-colors text-[var(--color-text-primary)]"
                       >
-                        <span className="material-symbols-outlined">folder_open</span>
+                        <FolderOpenIcon />
                       </button>
                     </div>
                   </div>
@@ -404,15 +409,15 @@ function App() {
               {/* Download Booster Settings */}
               <div className="glass-card p-6 mb-6">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[var(--color-text-primary)]">
-                  <span className="material-symbols-outlined text-primary">bolt</span>
+                  <BoltIcon className="text-primary" />
                   Download Booster
                   <div className="relative group flex items-center ml-1">
-                    <span className="material-symbols-outlined text-[var(--color-text-muted)] hover:text-primary transition-colors text-lg cursor-help">info</span>
+                    <InfoIcon className="text-[var(--color-text-muted)] hover:text-primary transition-colors text-lg cursor-help" />
 
                     {/* Tooltip */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-4 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out transform translate-y-1 group-hover:translate-y-0 z-50">
                       <div className="font-bold text-[var(--color-text-primary)] mb-2 text-sm flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary text-sm">rocket_launch</span>
+                        <RocketLaunchIcon size={20} className="text-primary" />
                         Optimization Guide
                       </div>
                       <div className="space-y-2 text-xs text-[var(--color-text-secondary)]">
@@ -557,7 +562,7 @@ function App() {
                     className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     title="Refresh"
                   >
-                    <span className="material-symbols-outlined">refresh</span>
+                    <RefreshIcon />
                   </button>
                   {records.length > 0 && (
                     <button
@@ -565,7 +570,7 @@ function App() {
                       className="p-2 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                       title="Clear all history"
                     >
-                      <span className="material-symbols-outlined">delete_sweep</span>
+                      <DeleteSweepIcon />
                     </button>
                   )}
                 </div>
@@ -610,11 +615,11 @@ function App() {
 
               {historyLoading ? (
                 <div className="flex-1 flex items-center justify-center">
-                  <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+                  <LoadingIcon size={36} className="animate-spin text-primary" />
                 </div>
               ) : records.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
-                  <span className="material-symbols-outlined text-6xl mb-4 opacity-30">folder_open</span>
+                  <FolderOpenIcon size={64} className="mb-4 opacity-30" />
                   <p className="text-sm">No downloads yet</p>
                 </div>
               ) : (
@@ -636,152 +641,17 @@ function App() {
           )}
 
           {activeTab === "update" && (
-            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
-              <div className="pt-8 pb-6">
-                <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Updates</h1>
-                <p className="text-[var(--color-text-secondary)]">Check for new versions</p>
-              </div>
-
-              {/* Current Version Card */}
-              <div className="glass-card p-6 mb-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-3 rounded-xl bg-primary/10">
-                    <span className="material-symbols-outlined text-2xl text-primary">info</span>
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Current Version</h2>
-                    <p className="text-2xl font-bold text-primary">
-                      v{updateInfo?.current_version || "1.0.0"}
-                    </p>
-                  </div>
-                </div>
-                {lastChecked && (
-                  <p className="text-xs text-[var(--color-text-muted)]">
-                    Last checked: {lastChecked.toLocaleString()}
-                  </p>
-                )}
-              </div>
-
-              {/* Check for Updates Button */}
-              <button
-                onClick={handleCheckUpdate}
-                disabled={updateLoading}
-                className="w-full py-4 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-[var(--color-text-on-accent)] rounded-xl font-medium transition-all flex items-center justify-center gap-3 mb-6"
-              >
-                {updateLoading ? (
-                  <>
-                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                    Checking...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined">refresh</span>
-                    Check for Updates
-                  </>
-                )}
-              </button>
-
-              {/* Error Message */}
-              {updateError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400 text-sm flex items-center gap-3">
-                  <span className="material-symbols-outlined">error</span>
-                  {updateError}
-                </div>
-              )}
-
-              {/* Update Available Card */}
-              {updateInfo?.update_available && (
-                <div className="glass-card p-6 border-2 border-green-500/30 bg-green-500/5 mb-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 rounded-xl bg-green-500/20">
-                      <span className="material-symbols-outlined text-2xl text-green-400">new_releases</span>
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-semibold text-green-400">Update Available!</h2>
-                      <p className="text-sm text-[var(--color-text-secondary)]">
-                        Version <span className="font-bold text-green-400">v{updateInfo.latest_version}</span> is available
-                      </p>
-                    </div>
-                  </div>
-
-                  {updateInfo.release_notes && (
-                    <div className="mb-4 p-4 rounded-lg bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-secondary)] max-h-32 overflow-y-auto">
-                      <p className="font-medium text-[var(--color-text-primary)] mb-2">What's New:</p>
-                      <p className="whitespace-pre-wrap">{updateInfo.release_notes}</p>
-                    </div>
-                  )}
-
-                  {/* Download Progress Bar */}
-                  {isInstalling && (
-                    <div className="mb-4">
-                      <div className="flex justify-between text-sm text-[var(--color-text-secondary)] mb-2">
-                        <span>Downloading update...</span>
-                        <span>{downloadProgress}%</span>
-                      </div>
-                      <div className="w-full h-3 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500 transition-all duration-300"
-                          style={{ width: `${downloadProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleInstallUpdate}
-                      disabled={isInstalling}
-                      className="flex-1 py-3 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      {isInstalling ? (
-                        <>
-                          <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                          {downloadProgress === 100 ? "Installing..." : "Downloading..."}
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined">system_update_alt</span>
-                          Install Update
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleDownloadUpdate(updateInfo.release_url)}
-                      disabled={isInstalling}
-                      className="px-4 py-3 bg-[var(--color-surface-muted)] hover:bg-[var(--color-surface-elevated)] disabled:opacity-50 text-[var(--color-text-primary)] rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      <span className="material-symbols-outlined">open_in_new</span>
-                      View Release
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Up to Date Card */}
-              {updateInfo && !updateInfo.update_available && (
-                <div className="glass-card p-6 border-2 border-primary/30 bg-primary/5">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-primary/20">
-                      <span className="material-symbols-outlined text-2xl text-primary">check_circle</span>
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-semibold text-primary">You're up to date!</h2>
-                      <p className="text-sm text-[var(--color-text-secondary)]">
-                        YT Downloader v{updateInfo.current_version} is the latest version.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Initial State - No check performed yet */}
-              {!updateInfo && !updateLoading && !updateError && (
-                <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
-                  <span className="material-symbols-outlined text-6xl mb-4 opacity-30">system_update</span>
-                  <p className="text-sm">Click the button above to check for updates</p>
-                </div>
-              )}
-            </div>
+            <UpdateTab
+              updateInfo={updateInfo}
+              updateLoading={updateLoading}
+              updateError={updateError}
+              lastChecked={lastChecked}
+              onCheckUpdate={handleCheckUpdate}
+              onInstallUpdate={handleInstallUpdate}
+              isInstalling={isInstalling}
+              downloadProgress={downloadProgress}
+              onDownloadExternal={(url) => handleDownloadUpdate(url)}
+            />
           )}
         </main>
 
