@@ -11,10 +11,10 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
 import type { ThemeOption } from "./hooks";
 import { UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem } from "./components";
-import type { AccelerationConfig, CommandResponse, Platform } from "./types";
+import type { AccelerationConfig, CommandResponse, Platform, UpdateInfo } from "./types";
 import "./App.css";
 
-type Tab = "settings" | "youtube" | "downloads";
+type Tab = "settings" | "youtube" | "downloads" | "update";
 
 function App() {
   const [url, setUrl] = useState("");
@@ -33,6 +33,12 @@ function App() {
 
   // Platform filter state
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
+
+  // Update state
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   // Hooks
   const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
@@ -124,6 +130,38 @@ function App() {
     await saveSettings();
     await handleSaveAccelConfig();
   }, [saveSettings, handleSaveAccelConfig]);
+
+  /**
+   * Check for updates from GitHub
+   */
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateLoading(true);
+    setUpdateError(null);
+    try {
+      const result = await invoke<CommandResponse<UpdateInfo>>("check_for_updates");
+      if (result.success && result.data) {
+        setUpdateInfo(result.data);
+        setLastChecked(new Date());
+      } else {
+        setUpdateError(result.error || "Failed to check for updates");
+      }
+    } catch (e) {
+      setUpdateError(String(e));
+    } finally {
+      setUpdateLoading(false);
+    }
+  }, []);
+
+  /**
+   * Open update download page
+   */
+  const handleDownloadUpdate = useCallback(async (url: string) => {
+    try {
+      await invoke("open_update_page", { url });
+    } catch (e) {
+      console.error("Failed to open update page:", e);
+    }
+  }, []);
 
   return (
     <div className="container mx-auto h-screen flex flex-col bg-transparent text-[var(--color-text-primary)] selection:bg-primary/30">
@@ -520,6 +558,128 @@ function App() {
                         onDelete={deleteRecord}
                       />
                     ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "update" && (
+            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+              <div className="pt-8 pb-6">
+                <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Updates</h1>
+                <p className="text-[var(--color-text-secondary)]">Check for new versions</p>
+              </div>
+
+              {/* Current Version Card */}
+              <div className="glass-card p-6 mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 rounded-xl bg-primary/10">
+                    <span className="material-symbols-outlined text-2xl text-primary">info</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Current Version</h2>
+                    <p className="text-2xl font-bold text-primary">
+                      v{updateInfo?.current_version || "1.0.0"}
+                    </p>
+                  </div>
+                </div>
+                {lastChecked && (
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    Last checked: {lastChecked.toLocaleString()}
+                  </p>
+                )}
+              </div>
+
+              {/* Check for Updates Button */}
+              <button
+                onClick={handleCheckUpdate}
+                disabled={updateLoading}
+                className="w-full py-4 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-[var(--color-text-on-accent)] rounded-xl font-medium transition-all flex items-center justify-center gap-3 mb-6"
+              >
+                {updateLoading ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined">refresh</span>
+                    Check for Updates
+                  </>
+                )}
+              </button>
+
+              {/* Error Message */}
+              {updateError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400 text-sm flex items-center gap-3">
+                  <span className="material-symbols-outlined">error</span>
+                  {updateError}
+                </div>
+              )}
+
+              {/* Update Available Card */}
+              {updateInfo?.update_available && (
+                <div className="glass-card p-6 border-2 border-green-500/30 bg-green-500/5 mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 rounded-xl bg-green-500/20">
+                      <span className="material-symbols-outlined text-2xl text-green-400">new_releases</span>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-green-400">Update Available!</h2>
+                      <p className="text-sm text-[var(--color-text-secondary)]">
+                        Version <span className="font-bold text-green-400">v{updateInfo.latest_version}</span> is available
+                      </p>
+                    </div>
+                  </div>
+
+                  {updateInfo.release_notes && (
+                    <div className="mb-4 p-4 rounded-lg bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-secondary)] max-h-32 overflow-y-auto">
+                      <p className="font-medium text-[var(--color-text-primary)] mb-2">What's New:</p>
+                      <p className="whitespace-pre-wrap">{updateInfo.release_notes}</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleDownloadUpdate(updateInfo.download_url || updateInfo.release_url)}
+                      className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined">download</span>
+                      Download Update
+                    </button>
+                    <button
+                      onClick={() => handleDownloadUpdate(updateInfo.release_url)}
+                      className="px-4 py-3 bg-[var(--color-surface-muted)] hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined">open_in_new</span>
+                      View Release
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Up to Date Card */}
+              {updateInfo && !updateInfo.update_available && (
+                <div className="glass-card p-6 border-2 border-primary/30 bg-primary/5">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-primary/20">
+                      <span className="material-symbols-outlined text-2xl text-primary">check_circle</span>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-primary">You're up to date!</h2>
+                      <p className="text-sm text-[var(--color-text-secondary)]">
+                        YT Downloader v{updateInfo.current_version} is the latest version.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Initial State - No check performed yet */}
+              {!updateInfo && !updateLoading && !updateError && (
+                <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
+                  <span className="material-symbols-outlined text-6xl mb-4 opacity-30">system_update</span>
+                  <p className="text-sm">Click the button above to check for updates</p>
                 </div>
               )}
             </div>

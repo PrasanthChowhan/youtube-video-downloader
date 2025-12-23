@@ -13,6 +13,7 @@ mod downloader;
 mod response;
 mod settings;
 mod thumbnail_cache;
+mod updater;
 
 use acceleration_config::AccelerationConfig;
 use download_history::{DownloadHistory, DownloadRecord, DownloadStatus as HistoryStatus};
@@ -21,6 +22,7 @@ use download_queue::{DownloadQueue, QueueItem, QueueStatus};
 use downloader::{fetch_video_info, get_download_dir, DownloadProgress, VideoInfo};
 use response::CommandResponse;
 use settings::{load_settings, save_settings as save_settings_to_file, AppSettings};
+use updater::UpdateInfo;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -394,6 +396,49 @@ pub async fn ensure_aria2c_available() -> Result<(), String> {
 }
 
 // ============================================================================
+// Auto-Update Commands
+// ============================================================================
+
+/// Check for updates from GitHub releases
+#[tauri::command]
+async fn check_for_updates() -> CommandResponse<UpdateInfo> {
+    match updater::check_for_updates().await {
+        Ok(info) => CommandResponse::ok(info),
+        Err(e) => CommandResponse::err(e),
+    }
+}
+
+/// Open update download page in browser
+#[tauri::command]
+async fn open_update_page(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // Download Queue Commands
 // ============================================================================
 
@@ -690,6 +735,9 @@ pub fn run() {
             manager_get_queue_state,
             manager_set_max_concurrent,
             manager_continue_queue,
+            // Auto-update commands
+            check_for_updates,
+            open_update_page,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

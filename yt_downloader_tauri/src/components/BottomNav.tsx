@@ -1,6 +1,6 @@
 /** Bottom navigation component */
 
-type Tab = "settings" | "youtube" | "downloads";
+type Tab = "settings" | "youtube" | "downloads" | "update";
 
 interface BottomNavProps {
     activeTab: Tab;
@@ -12,6 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         { id: "settings" as Tab, icon: "settings", label: "Settings" },
         { id: "youtube" as Tab, icon: "smart_display", label: "YouTube" },
         { id: "downloads" as Tab, icon: "folder", label: "Downloads" },
+        { id: "update" as Tab, icon: "system_update", label: "Update" },
     ];
 
     return (

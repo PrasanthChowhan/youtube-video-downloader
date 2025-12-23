@@ -114,3 +114,14 @@ export interface QueueItem {
     status: QueueStatus;
     error: string | null;
 }
+
+/** Update information from GitHub releases */
+export interface UpdateInfo {
+    current_version: string;
+    latest_version: string;
+    update_available: boolean;
+    release_url: string;
+    download_url: string;
+    release_notes: string;
+    published_at: string;
+}

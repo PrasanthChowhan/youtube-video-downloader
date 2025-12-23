@@ -51,6 +51,7 @@ export function useDownload() {
                         status: "completed",
                         created_at: Math.floor(Date.now() / 1000),
                         completed_at: Math.floor(Date.now() / 1000),
+                        platform: downloadInfo.videoInfo.platform || "unknown",
                     };
                     await invoke("add_download_record", { record });
                 }
@@ -73,6 +74,7 @@ export function useDownload() {
                         status: "cancelled",
                         created_at: Math.floor(Date.now() / 1000),
                         completed_at: null,
+                        platform: downloadInfo.videoInfo.platform || "unknown",
                     };
                     await invoke("add_download_record", { record });
                 }
