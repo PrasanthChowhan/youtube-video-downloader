@@ -37,7 +37,7 @@ pub struct UpdateInfo {
 fn parse_version(version: &str) -> Option<(u32, u32, u32)> {
     let v = version.trim_start_matches('v');
     let parts: Vec<&str> = v.split('.').collect();
-    
+
     if parts.len() >= 3 {
         let major = parts[0].parse().ok()?;
         let minor = parts[1].parse().ok()?;
@@ -123,41 +123,42 @@ fn get_download_url_for_os(assets: &[GitHubAsset]) -> String {
 pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     // Current version from Cargo.toml
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    
+
     // GitHub API endpoint for latest release
-    let api_url = "https://api.github.com/repos/PrasanthChowhan/youtube-video-downloader/releases/latest";
-    
+    let api_url =
+        "https://api.github.com/repos/PrasanthChowhan/youtube-video-downloader/releases/latest";
+
     // Create HTTP client with required User-Agent header
     let client = reqwest::Client::builder()
         .user_agent("YT-Downloader-Update-Checker")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    
+
     // Fetch latest release info
     let response = client
         .get(api_url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch release info: {}", e))?;
-    
+
     if !response.status().is_success() {
         return Err(format!("GitHub API returned status: {}", response.status()));
     }
-    
+
     let release: GitHubRelease = response
         .json()
         .await
         .map_err(|e| format!("Failed to parse release info: {}", e))?;
-    
+
     // Extract version from tag (remove 'v' prefix if present)
     let latest_version = release.tag_name.trim_start_matches('v').to_string();
-    
+
     // Check if update is available
     let update_available = is_newer_version(&current_version, &latest_version);
-    
+
     // Get appropriate download URL for current OS
     let download_url = get_download_url_for_os(&release.assets);
-    
+
     Ok(UpdateInfo {
         current_version,
         latest_version,

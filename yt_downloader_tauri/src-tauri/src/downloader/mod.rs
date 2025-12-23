@@ -24,11 +24,10 @@ pub fn get_download_dir() -> PathBuf {
     }
 }
 
-
 /// Fetches video information from a URL (YouTube or Instagram).
 pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, String> {
     let platform = detect_platform(url);
-    
+
     // Clean URL based on platform
     let cleaned_url = match platform {
         Platform::YouTube => clean_youtube_url(url),
@@ -39,7 +38,13 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
         .shell()
         .sidecar("yt-dlp")
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-        .args(["--dump-json", "--no-download", "--no-warnings", "--no-playlist", &cleaned_url]);
+        .args([
+            "--dump-json",
+            "--no-download",
+            "--no-warnings",
+            "--no-playlist",
+            &cleaned_url,
+        ]);
 
     let output = command
         .output()
@@ -52,8 +57,8 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
     }
 
     let json_str = String::from_utf8_lossy(&output.stdout);
-    let json: serde_json::Value =
-        serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse yt-dlp output: {}", e))?;
+    let json: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse yt-dlp output: {}", e))?;
 
     // For Instagram, use the first line of description as title (this is how IG captions work)
     let title = if platform == Platform::Instagram {
@@ -77,7 +82,10 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
         title,
         uploader: json["uploader"].as_str().unwrap_or("Unknown").to_string(),
         duration: json["duration"].as_u64().unwrap_or(0),
-        duration_string: json["duration_string"].as_str().unwrap_or("0:00").to_string(),
+        duration_string: json["duration_string"]
+            .as_str()
+            .unwrap_or("0:00")
+            .to_string(),
         thumbnail: json["thumbnail"].as_str().map(|s| s.to_string()),
         view_count: json["view_count"].as_u64(),
         filesize_approx: json["filesize_approx"].as_u64(),
@@ -156,11 +164,20 @@ pub async fn download_video_with_child(
     use_throttle_protection: bool,
     use_aria2c: bool,
     aria2_split_size: Option<String>,
-) -> Result<(tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>, tauri_plugin_shell::process::CommandChild), String> {
+) -> Result<
+    (
+        tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>,
+        tauri_plugin_shell::process::CommandChild,
+    ),
+    String,
+> {
     std::fs::create_dir_all(&output_dir)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
-    let output_template = output_dir.join(filename_template).to_string_lossy().to_string();
+    let output_template = output_dir
+        .join(filename_template)
+        .to_string_lossy()
+        .to_string();
 
     // Detect platform for Instagram-specific handling
     let platform = detect_platform(url);
@@ -191,15 +208,23 @@ pub async fn download_video_with_child(
         // Use high connection count for aria2c speed boost
         let connections = concurrent_fragments;
         let split_size = aria2_split_size.unwrap_or_else(|| "1M".to_string());
-        let aria_args = format!("-x {} -s {} -k {} -c --file-allocation=none", connections, connections, split_size);
+        let aria_args = format!(
+            "-x {} -s {} -k {} -c --file-allocation=none",
+            connections, connections, split_size
+        );
         eprintln!("[DEBUG] Using aria2c with args: {}", aria_args);
         args.extend([
-            "--external-downloader".to_string(), "aria2c".to_string(),
-            "--external-downloader-args".to_string(), aria_args,
+            "--external-downloader".to_string(),
+            "aria2c".to_string(),
+            "--external-downloader-args".to_string(),
+            aria_args,
         ]);
     } else if concurrent_fragments > 1 {
         // Use yt-dlp's built-in concurrent fragments if not using aria2c
-        eprintln!("[DEBUG] Using yt-dlp -N {} concurrent fragments", concurrent_fragments);
+        eprintln!(
+            "[DEBUG] Using yt-dlp -N {} concurrent fragments",
+            concurrent_fragments
+        );
         args.extend(["-N".to_string(), concurrent_fragments.to_string()]);
     }
 
@@ -215,7 +240,9 @@ pub async fn download_video_with_child(
         .map_err(|e| format!("Failed to create sidecar: {}", e))?
         .args(&args);
 
-    let (rx, child) = command.spawn().map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+    let (rx, child) = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
     Ok((rx, child))
 }
@@ -223,7 +250,7 @@ pub async fn download_video_with_child(
 /// Parse progress from yt-dlp output line
 pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
     let line = line.trim();
-    
+
     let data = if line.starts_with("download:") {
         Some(&line[9..])
     } else if line.contains("|") && !line.starts_with("[") {
@@ -237,10 +264,13 @@ pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
         if parts.len() >= 5 {
             let downloaded: u64 = parts[3].parse().unwrap_or(0);
             let total: Option<u64> = parts[4].parse().ok();
-            
+
             let percent_str = parts[0].trim().trim_end_matches('%');
             let percent: f64 = if percent_str == "NA" || percent_str == "N/A" {
-                total.filter(|&t| t > 0).map(|t| (downloaded as f64 / t as f64) * 100.0).unwrap_or(0.0)
+                total
+                    .filter(|&t| t > 0)
+                    .map(|t| (downloaded as f64 / t as f64) * 100.0)
+                    .unwrap_or(0.0)
             } else {
                 percent_str.parse().unwrap_or(0.0)
             };

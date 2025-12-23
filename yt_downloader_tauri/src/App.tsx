@@ -6,6 +6,8 @@ import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
@@ -39,6 +41,8 @@ function App() {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   // Hooks
   const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
@@ -160,6 +164,52 @@ function App() {
       await invoke("open_update_page", { url });
     } catch (e) {
       console.error("Failed to open update page:", e);
+    }
+  }, []);
+
+  /**
+   * Download and install update using Tauri updater plugin
+   */
+  const handleInstallUpdate = useCallback(async () => {
+    setIsInstalling(true);
+    setDownloadProgress(0);
+    setUpdateError(null);
+
+    try {
+      const update = await check();
+      if (update) {
+        let downloaded = 0;
+        let contentLength = 0;
+
+        await update.downloadAndInstall((event) => {
+          switch (event.event) {
+            case "Started":
+              contentLength = event.data.contentLength || 0;
+              console.log(`Started downloading ${contentLength} bytes`);
+              break;
+            case "Progress":
+              downloaded += event.data.chunkLength;
+              if (contentLength > 0) {
+                setDownloadProgress(Math.round((downloaded / contentLength) * 100));
+              }
+              break;
+            case "Finished":
+              console.log("Download finished");
+              setDownloadProgress(100);
+              break;
+          }
+        });
+
+        // Update installed, restart the app
+        await relaunch();
+      } else {
+        setUpdateError("No update available");
+      }
+    } catch (e) {
+      console.error("Update failed:", e);
+      setUpdateError(String(e));
+    } finally {
+      setIsInstalling(false);
     }
   }, []);
 
@@ -639,17 +689,44 @@ function App() {
                     </div>
                   )}
 
+                  {/* Download Progress Bar */}
+                  {isInstalling && (
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm text-[var(--color-text-secondary)] mb-2">
+                        <span>Downloading update...</span>
+                        <span>{downloadProgress}%</span>
+                      </div>
+                      <div className="w-full h-3 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 transition-all duration-300"
+                          style={{ width: `${downloadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-3">
                     <button
-                      onClick={() => handleDownloadUpdate(updateInfo.download_url || updateInfo.release_url)}
-                      className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                      onClick={handleInstallUpdate}
+                      disabled={isInstalling}
+                      className="flex-1 py-3 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                     >
-                      <span className="material-symbols-outlined">download</span>
-                      Download Update
+                      {isInstalling ? (
+                        <>
+                          <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                          {downloadProgress === 100 ? "Installing..." : "Downloading..."}
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined">system_update_alt</span>
+                          Install Update
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => handleDownloadUpdate(updateInfo.release_url)}
-                      className="px-4 py-3 bg-[var(--color-surface-muted)] hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                      disabled={isInstalling}
+                      className="px-4 py-3 bg-[var(--color-surface-muted)] hover:bg-[var(--color-surface-elevated)] disabled:opacity-50 text-[var(--color-text-primary)] rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                     >
                       <span className="material-symbols-outlined">open_in_new</span>
                       View Release
