@@ -79,6 +79,28 @@ function App() {
     return () => { unlisten.then(fn => fn()); };
   }, [fetchHistory]);
 
+  // Auto-check for updates on app startup
+  useEffect(() => {
+    const checkUpdatesOnStartup = async () => {
+      try {
+        const result = await invoke<CommandResponse<UpdateInfo>>("check_for_updates");
+        if (result.success && result.data) {
+          setUpdateInfo(result.data);
+          if (result.data.update_available) {
+            console.log(`Update available: v${result.data.latest_version}`);
+          }
+        }
+      } catch (e) {
+        // Silently fail on startup - don't show error
+        console.log("Update check failed:", e);
+      }
+    };
+
+    // Delay check by 2 seconds to not block app startup
+    const timer = setTimeout(checkUpdatesOnStartup, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   /**
    * Handle drag end for queue reordering
    */
@@ -765,7 +787,7 @@ function App() {
 
       </div>
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} hasUpdate={updateInfo?.update_available} />
     </div>
   );
 }
