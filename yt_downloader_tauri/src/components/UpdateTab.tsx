@@ -88,7 +88,7 @@ export const UpdateTab: React.FC<UpdateTabProps> = ({
     const notesToShow = (isUpdateAvailable && updateInfo?.release_notes) ? updateInfo.release_notes : fetchedNotes;
 
     return (
-        <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8 mx-auto" >
+        <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8 mx-auto" >
             {/* Main Status Card */}
             < div className="glass-card p-10 flex flex-col items-center justify-center text-center relative overflow-hidden mb-6" >
                 {/* Background Glow Effect */}

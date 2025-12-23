@@ -14,7 +14,7 @@ import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from ".
 import type { ThemeOption } from "./hooks";
 import { UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab } from "./components";
 import {
-  DownloadIcon, PaletteIcon, FolderIcon, FolderOpenIcon, BoltIcon, InfoIcon,
+  DownloadIcon, PaletteIcon, FolderIcon, FolderOpenIcon, FolderSearchIcon, BoltIcon, InfoIcon,
   RocketLaunchIcon, RefreshIcon, DeleteSweepIcon, SystemUpdateIcon, NewReleasesIcon,
   SystemUpdateAltIcon, OpenInNewIcon, CheckCircleIcon, ErrorIcon, LoadingIcon
 } from "./components";
@@ -258,7 +258,7 @@ function App() {
         <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col items-center">
 
           {activeTab === "youtube" && (
-            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8">
               {/* Headline */}
               <div className="pt-8 pb-6 text-center">
                 <h1 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight mb-2 text-[var(--color-text-primary)]">
@@ -332,7 +332,7 @@ function App() {
           )}
 
           {activeTab === "settings" && (
-            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8">
               <div className="pt-8 pb-6">
                 <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Settings</h1>
                 <p className="text-[var(--color-text-secondary)]">Configure download options</p>
@@ -386,7 +386,7 @@ function App() {
                         onClick={handleBrowse}
                         className="px-4 py-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-surface-elevated)] transition-colors text-[var(--color-text-primary)]"
                       >
-                        <FolderOpenIcon />
+                        <FolderSearchIcon />
                       </button>
                     </div>
                   </div>
@@ -550,7 +550,7 @@ function App() {
           )}
 
           {activeTab === "downloads" && (
-            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 py-8 md:px-8">
+            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8">
               <div className="pt-8 pb-6 flex items-center justify-between">
                 <div>
                   <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Downloads</h1>
