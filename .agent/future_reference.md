@@ -41,3 +41,33 @@ Upon cancellation, we actively clean up temporary files to prevent disk clutter:
    - `.aria2` (aria2c control file)
 
 This logic ensures a "clean" cancel that behaves as the user expects.
+
+---
+
+# Version Management
+
+## Single Source of Truth
+- **Source:** `package.json` version
+- **Syncs to:** `Cargo.toml`, `tauri.conf.json`
+- **Script:** `yt_downloader_tauri/scripts/sync-versions.js`
+
+## Commands
+```bash
+cd yt_downloader_tauri
+npm run version:bump 1.0.3   # Set specific version (updates ALL files)
+npm run version:sync         # Sync current package.json version to others
+```
+
+## Release Workflow
+```bash
+npm run version:bump X.X.X
+git add -A && git commit -m "chore: Bump version to X.X.X"
+git tag vX.X.X
+git push origin main --tags
+```
+
+## Why This Matters
+Tauri reads version from `Cargo.toml`, not `tauri.conf.json`. All 3 files MUST match.
+
+
+
