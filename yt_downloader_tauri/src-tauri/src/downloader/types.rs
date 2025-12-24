@@ -39,6 +39,70 @@ pub fn detect_platform(url: &str) -> Platform {
     }
 }
 
+/// Download method to use based on URL type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DownloadMethod {
+    /// Use yt-dlp with -N flag for video sites (YouTube, Instagram, TikTok, etc.)
+    YtDlpNative,
+    /// Use aria2c directly for direct file downloads (.mp4, .zip, etc.)
+    Aria2cDirect,
+}
+
+/// Detect the optimal download method based on URL.
+///
+/// - Direct file URLs (.mp4, .zip, .exe) -> aria2c for max speed
+/// - Video sites (YouTube, Instagram, TikTok) -> yt-dlp with -N flag
+pub fn detect_download_method(url: &str) -> DownloadMethod {
+    let url_lower = url.to_lowercase();
+
+    // Known video sites that require yt-dlp for extraction
+    let video_sites = [
+        "youtube.com",
+        "youtu.be",
+        "instagram.com",
+        "instagr.am",
+        "tiktok.com",
+        "twitter.com",
+        "x.com",
+        "facebook.com",
+        "fb.watch",
+        "vimeo.com",
+        "twitch.tv",
+        "dailymotion.com",
+        "reddit.com",
+        "bilibili.com",
+        "nicovideo.jp",
+        "soundcloud.com",
+    ];
+
+    // Check if it's a known video site
+    for site in video_sites {
+        if url_lower.contains(site) {
+            return DownloadMethod::YtDlpNative;
+        }
+    }
+
+    // Check for direct file extensions (likely direct downloads)
+    let direct_extensions = [
+        ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", // Video
+        ".mp3", ".m4a", ".wav", ".flac", ".ogg", // Audio
+        ".zip", ".rar", ".7z", ".tar", ".gz", // Archives
+        ".exe", ".msi", ".dmg", ".pkg", // Installers
+        ".iso", ".img", // Disk images
+        ".pdf", ".doc", ".docx", // Documents
+    ];
+
+    for ext in direct_extensions {
+        // Check if URL ends with extension or has extension before query params
+        if url_lower.ends_with(ext) || url_lower.contains(&format!("{ext}?")) {
+            return DownloadMethod::Aria2cDirect;
+        }
+    }
+
+    // Default: use yt-dlp as it supports 1000+ sites
+    DownloadMethod::YtDlpNative
+}
+
 /// Video information extracted from a URL.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoInfo {

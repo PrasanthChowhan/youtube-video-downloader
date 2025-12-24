@@ -5,9 +5,10 @@ pub mod types;
 pub mod youtube;
 
 pub use formats::{format_bytes, format_eta, format_speed};
-pub use types::{detect_platform, DownloadProgress, Platform, VideoInfo};
+pub use types::{detect_platform, detect_download_method, DownloadMethod, DownloadProgress, Platform, VideoInfo};
 pub use youtube::clean_youtube_url;
 
+use crate::binary_downloader;
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri_plugin_shell::process::CommandEvent;
@@ -205,6 +206,11 @@ pub async fn download_video_with_child(
     }
 
     if use_aria2c {
+        // Get the full path to aria2c binary (not relying on system PATH)
+        let aria2c_path = binary_downloader::get_aria2c_path()
+            .unwrap_or_else(|_| PathBuf::from("aria2c"));
+        let aria2c_path_str = aria2c_path.to_string_lossy().to_string();
+        
         // Use high connection count for aria2c speed boost
         let connections = concurrent_fragments;
         let split_size = aria2_split_size.unwrap_or_else(|| "1M".to_string());
@@ -212,10 +218,11 @@ pub async fn download_video_with_child(
             "-x {} -s {} -k {} -c --file-allocation=none",
             connections, connections, split_size
         );
+        eprintln!("[DEBUG] Using aria2c at: {}", aria2c_path_str);
         eprintln!("[DEBUG] Using aria2c with args: {}", aria_args);
         args.extend([
             "--external-downloader".to_string(),
-            "aria2c".to_string(),
+            aria2c_path_str,
             "--external-downloader-args".to_string(),
             aria_args,
         ]);
@@ -243,6 +250,55 @@ pub async fn download_video_with_child(
     let (rx, child) = command
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+
+    Ok((rx, child))
+}
+
+/// Download a direct file URL using aria2c with multiple connections.
+/// This is faster than yt-dlp for direct file downloads (.mp4, .zip, etc.)
+pub async fn download_with_aria2c(
+    app: &AppHandle,
+    url: &str,
+    output_dir: PathBuf,
+    connections: u8,
+) -> Result<
+    (
+        tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>,
+        tauri_plugin_shell::process::CommandChild,
+    ),
+    String,
+> {
+    std::fs::create_dir_all(&output_dir)
+        .map_err(|e| format!("Failed to create output directory: {}", e))?;
+
+    let aria2c_path = binary_downloader::get_aria2c_path()?;
+    let aria2c_path_str = aria2c_path.to_string_lossy().to_string();
+
+    eprintln!("[INFO] Direct file detected - using aria2c for maximum speed");
+    eprintln!("[DEBUG] aria2c path: {}", aria2c_path_str);
+
+    let args = vec![
+        "-x".to_string(), connections.to_string(),           // Max connections per server
+        "-s".to_string(), connections.to_string(),           // Split file into N parts
+        "-k".to_string(), "1M".to_string(),                  // Min split size
+        "-c".to_string(),                                     // Continue partial downloads
+        "--file-allocation=none".to_string(),                 // Don't pre-allocate
+        "--summary-interval=1".to_string(),                   // Progress updates every second
+        "-d".to_string(), output_dir.to_string_lossy().to_string(),
+        url.to_string(),
+    ];
+
+    eprintln!("[DEBUG] aria2c args: {:?}", args);
+
+    // Use shell command since aria2c is not a Tauri sidecar
+    let command = app
+        .shell()
+        .command(aria2c_path_str)
+        .args(&args);
+
+    let (rx, child) = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn aria2c: {}", e))?;
 
     Ok((rx, child))
 }

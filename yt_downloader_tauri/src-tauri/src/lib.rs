@@ -77,20 +77,37 @@ async fn start_download(
     let (concurrent_fragments, aria2_split_size) = accel_config.get_optimized_params(filesize);
 
     let use_throttle = accel_config.use_throttle_protection;
-    let use_aria2c = accel_config.use_aria2c;
-
-    // Spawn the download process
-    let (mut rx, child) = downloader::download_video_with_child(
-        &app,
-        &url,
-        output_dir,
-        &template,
-        concurrent_fragments,
-        use_throttle,
-        use_aria2c,
-        Some(aria2_split_size),
-    )
-    .await?;
+    
+    // Smart URL detection: route to optimal download method
+    use downloader::{detect_download_method, DownloadMethod};
+    let download_method = detect_download_method(&url);
+    
+    // For video sites, always disable aria2c (use yt-dlp's native -N)
+    // For direct files, use aria2c directly for maximum speed
+    let (mut rx, child) = match download_method {
+        DownloadMethod::Aria2cDirect => {
+            eprintln!("[INFO] Direct file URL detected - using aria2c with {} connections", concurrent_fragments);
+            downloader::download_with_aria2c(
+                &app,
+                &url,
+                output_dir,
+                concurrent_fragments,
+            ).await?
+        }
+        DownloadMethod::YtDlpNative => {
+            eprintln!("[INFO] Video site detected - using yt-dlp with -N {}", concurrent_fragments);
+            downloader::download_video_with_child(
+                &app,
+                &url,
+                output_dir,
+                &template,
+                concurrent_fragments,
+                use_throttle,
+                false,  // Never use aria2c as external downloader for video sites
+                Some(aria2_split_size),
+            ).await?
+        }
+    };
 
     // Get the PID for process tree killing
     let pid = child.pid();
@@ -572,18 +589,35 @@ async fn process_next_queue_item(
         1
     };
 
-    // Start download
-    let result = downloader::download_video_with_child(
-        &app,
-        &url,
-        output_dir.clone(),
-        &template,
-        concurrent_fragments,
-        accel_config.use_throttle_protection,
-        accel_config.use_aria2c,
-        Some(accel_config.aria2_min_split_size.clone()),
-    )
-    .await;
+    // Smart URL detection
+    use downloader::{detect_download_method, DownloadMethod};
+    let download_method = detect_download_method(&url);
+
+    // Start download based on URL type
+    let result = match download_method {
+        DownloadMethod::Aria2cDirect => {
+            eprintln!("[INFO] Queue: Direct file - using aria2c with {} connections", concurrent_fragments);
+            downloader::download_with_aria2c(
+                &app,
+                &url,
+                output_dir.clone(),
+                concurrent_fragments,
+            ).await
+        }
+        DownloadMethod::YtDlpNative => {
+            eprintln!("[INFO] Queue: Video site - using yt-dlp with -N {}", concurrent_fragments);
+            downloader::download_video_with_child(
+                &app,
+                &url,
+                output_dir.clone(),
+                &template,
+                concurrent_fragments,
+                accel_config.use_throttle_protection,
+                false,  // Never use aria2c as external downloader for video sites
+                Some(accel_config.aria2_min_split_size.clone()),
+            ).await
+        }
+    };
 
     match result {
         Ok((mut rx, child)) => {
@@ -965,18 +999,35 @@ async fn run_download_task(
         1
     };
 
-    // Start download
-    let result = downloader::download_video_with_child(
-        &app,
-        &url,
-        output_dir.clone(),
-        &template,
-        concurrent_fragments,
-        accel_config.use_throttle_protection,
-        accel_config.use_aria2c,
-        Some(accel_config.aria2_min_split_size.clone()),
-    )
-    .await;
+    // Smart URL detection
+    use downloader::{detect_download_method, DownloadMethod};
+    let download_method = detect_download_method(&url);
+
+    // Start download based on URL type
+    let result = match download_method {
+        DownloadMethod::Aria2cDirect => {
+            eprintln!("[INFO] Manager: Direct file - using aria2c with {} connections", concurrent_fragments);
+            downloader::download_with_aria2c(
+                &app,
+                &url,
+                output_dir.clone(),
+                concurrent_fragments,
+            ).await
+        }
+        DownloadMethod::YtDlpNative => {
+            eprintln!("[INFO] Manager: Video site - using yt-dlp with -N {}", concurrent_fragments);
+            downloader::download_video_with_child(
+                &app,
+                &url,
+                output_dir.clone(),
+                &template,
+                concurrent_fragments,
+                accel_config.use_throttle_protection,
+                false,  // Never use aria2c as external downloader for video sites
+                Some(accel_config.aria2_min_split_size.clone()),
+            ).await
+        }
+    };
 
     match result {
         Ok((mut rx, child)) => {
