@@ -8,8 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "postinstall": "node scripts/postinstall.js",
-    "download-binaries": "node scripts/postinstall.js",
+    "postinstall": "node scripts/postinstall.cjs",
+    "download-binaries": "node scripts/postinstall.cjs",
     "version:sync": "node scripts/sync-versions.js",
     "version:bump": "node scripts/sync-versions.js"
   },
