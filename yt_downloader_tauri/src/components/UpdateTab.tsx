@@ -232,6 +232,29 @@ export const UpdateTab: React.FC<UpdateTabProps> = ({
                     )
                 }
             </div >
+
+            {/* Feedback Section */}
+            <div className="glass-card p-6 border-t border-[var(--color-border)] mt-6">
+                <div className="flex flex-col items-center text-center">
+                    <span className="text-3xl mb-3">💬</span>
+                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">
+                        We'd love your feedback!
+                    </h3>
+                    <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                        Help us improve by sharing your thoughts, reporting bugs, or suggesting new features.
+                    </p>
+                    <button
+                        onClick={() => {
+                            const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSfCBypqJR0aIcBp3ku3asgohXFMDT9diysMvBy1f8isJwZYMg/viewform";
+                            window.open(formUrl, '_blank');
+                        }}
+                        className="px-6 py-3 rounded-xl font-medium transition-all duration-300 cursor-pointer flex items-center gap-2 bg-[var(--color-surface-muted)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)] hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        <span>📝</span>
+                        Send Feedback
+                    </button>
+                </div>
+            </div>
         </div >
     );
 };
