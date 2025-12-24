@@ -141,3 +141,43 @@ pub async fn ensure_aria2c() -> Result<(), String> {
         download_aria2c().await
     }
 }
+
+/// Get the path to ffmpeg binary
+/// In production, this is the bundled sidecar. In dev, it's in the binaries folder.
+pub fn get_ffmpeg_path() -> Result<PathBuf, String> {
+    let bin_dir = get_binary_dir()?;
+
+    #[cfg(target_os = "windows")]
+    let binary_name = "ffmpeg-x86_64-pc-windows-msvc.exe";
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let binary_name = "ffmpeg-aarch64-apple-darwin";
+
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let binary_name = "ffmpeg-x86_64-apple-darwin";
+
+    #[cfg(target_os = "linux")]
+    let binary_name = "ffmpeg-x86_64-unknown-linux-gnu";
+
+    let path = bin_dir.join(binary_name);
+    
+    // Also check if it exists in the same directory as the executable (for bundled apps)
+    if !path.exists() {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                // Check in Resources folder (macOS app bundle)
+                let resources_path = exe_dir.join("../Resources").join(binary_name);
+                if resources_path.exists() {
+                    return Ok(resources_path);
+                }
+                // Check directly next to executable
+                let sibling_path = exe_dir.join(binary_name);
+                if sibling_path.exists() {
+                    return Ok(sibling_path);
+                }
+            }
+        }
+    }
+
+    Ok(path)
+}

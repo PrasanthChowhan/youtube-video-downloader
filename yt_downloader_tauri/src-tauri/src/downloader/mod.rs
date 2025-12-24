@@ -195,6 +195,18 @@ pub async fn download_video_with_child(
         "download:%(progress.percent)s|%(progress.speed)s|%(progress.eta)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
 
+    // Add ffmpeg location so yt-dlp can find it for merging audio/video
+    // This is essential for bundled apps on Mac where ffmpeg isn't in PATH
+    if let Ok(ffmpeg_path) = binary_downloader::get_ffmpeg_path() {
+        if ffmpeg_path.exists() {
+            args.extend([
+                "--ffmpeg-location".to_string(),
+                ffmpeg_path.to_string_lossy().to_string(),
+            ]);
+            eprintln!("[DEBUG] Using ffmpeg at: {:?}", ffmpeg_path);
+        }
+    }
+
     // For Instagram, override title with first line of description (caption)
     // This makes the filename match what users see in the app
     if platform == Platform::Instagram {
