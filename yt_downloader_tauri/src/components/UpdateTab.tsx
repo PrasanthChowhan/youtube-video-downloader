@@ -245,8 +245,8 @@ export const UpdateTab: React.FC<UpdateTabProps> = ({
                     </p>
                     <button
                         onClick={() => {
-                            const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSfCBypqJR0aIcBp3ku3asgohXFMDT9diysMvBy1f8isJwZYMg/viewform";
-                            window.open(formUrl, '_blank');
+                            const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSfCBypqJR0aIcBp3ku3asgohXFMDT9diysMvBy1f8isJwZYMg/viewform?usp=dialog";
+                            onDownloadExternal(formUrl);
                         }}
                         className="px-6 py-3 rounded-xl font-medium transition-all duration-300 cursor-pointer flex items-center gap-2 bg-[var(--color-surface-muted)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)] hover:scale-[1.02] active:scale-[0.98]"
                     >
