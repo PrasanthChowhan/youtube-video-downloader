@@ -47,6 +47,7 @@ function App() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isInstalling, setIsInstalling] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Hooks
   const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
@@ -159,6 +160,8 @@ function App() {
   const handleSaveAll = useCallback(async () => {
     await saveSettings();
     await handleSaveAccelConfig();
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   }, [saveSettings, handleSaveAccelConfig]);
 
   /**
@@ -439,225 +442,191 @@ function App() {
                 </h2>
 
                 <div className="space-y-4">
-                  {/* Enable toggle */}
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm text-[var(--color-text-primary)]">Enable Speed Boost</span>
-                    <input
-                      type="checkbox"
-                      checked={accelConfig.enabled}
-                      onChange={(e) => setAccelConfig({ ...accelConfig, enabled: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
-                    />
-                  </label>
-
-                  {/* Use aria2c */}
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm text-[var(--color-text-primary)]">Use aria2c (faster downloads)</span>
-                    <input
-                      type="checkbox"
-                      checked={accelConfig.use_aria2c}
-                      onChange={(e) => setAccelConfig({ ...accelConfig, use_aria2c: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
-                    />
-                  </label>
-
-                  {/* Smart Mode */}
-                  <label className="flex items-center justify-between cursor-pointer p-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg">
-                    <div>
-                      <span className="block text-sm font-medium text-[var(--color-text-primary)]">Smart Mode</span>
-                      <span className="block text-xs text-primary mt-0.5">Auto-optimizes for speed & large files</span>
+                  {/* Concurrent Connections Slider */}
+                  <div className="p-5 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-xl">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <label className="text-base font-semibold text-[var(--color-text-primary)]">Download Speed</label>
+                          {/* Tooltip */}
+                          <div className="group relative">
+                            <span className="text-[var(--color-text-muted)] cursor-help">ⓘ</span>
+                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-lg z-10">
+                              <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+                                <strong className="text-primary">For YouTube:</strong> Use 8-16 for best results. Higher may trigger rate limits.
+                              </p>
+                              <p className="text-xs text-[var(--color-text-secondary)]">
+                                <strong className="text-primary">For Direct Files:</strong> Use 16-32 for maximum speed.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">Controls parallel connections for faster downloads</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-3xl font-bold text-primary">{accelConfig.max_concurrent_fragments}</span>
+                        <p className="text-xs text-[var(--color-text-muted)]">connections</p>
+                      </div>
                     </div>
+
                     <input
-                      type="checkbox"
-                      checked={accelConfig.smart_mode}
-                      onChange={(e) => setAccelConfig({ ...accelConfig, smart_mode: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
-                    />
-                  </label>
-
-                  {!accelConfig.smart_mode && (
-                    <>
-                      {/* Concurrent Fragments */}
-                      <div>
-                        <div className="flex justify-between mb-2">
-                          <label className="text-sm text-[var(--color-text-secondary)]">Concurrent Fragments</label>
-                          <span className="text-sm font-medium text-[var(--color-text-primary)]">{accelConfig.max_concurrent_fragments}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="1"
-                          max="32"
-                          step="1"
-                          value={accelConfig.max_concurrent_fragments}
-                          onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
-                          className="w-full h-2 bg-[var(--color-surface-muted)] rounded-lg appearance-none cursor-pointer accent-primary"
-                        />
-                        <div className="flex justify-between text-xs text-[var(--color-text-muted)] mt-1">
-                          <span>1</span>
-                          <span>32</span>
-                        </div>
-                      </div>
-
-                      {/* Min Split Size */}
-                      <div>
-                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2">Aria2 Min Split Size (e.g. 1M)</label>
-                        <input
-                          type="text"
-                          value={accelConfig.aria2_min_split_size || "1M"}
-                          onChange={(e) => setAccelConfig({ ...accelConfig, aria2_min_split_size: e.target.value })}
-                          className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                          placeholder="1M"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Min File Size */}
-                  <div>
-                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">Min File Size for Boost (MB)</label>
-                    <input
-                      type="number"
+                      type="range"
                       min="1"
-                      max="100"
-                      value={accelConfig.min_file_size_mb}
-                      onChange={(e) => setAccelConfig({ ...accelConfig, min_file_size_mb: parseInt(e.target.value) || 10 })}
-                      className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                      max="32"
+                      step="1"
+                      value={accelConfig.max_concurrent_fragments}
+                      onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
+                      className="w-full h-2 rounded-lg cursor-pointer accent-primary"
+                      style={{
+                        background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) ${((accelConfig.max_concurrent_fragments - 1) / 31) * 100}%, var(--color-border) ${((accelConfig.max_concurrent_fragments - 1) / 31) * 100}%, var(--color-border) 100%)`
+                      }}
                     />
-                  </div>
 
-                  {/* Throttle Protection */}
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm text-[var(--color-text-primary)]">Throttle Protection (prevents bans)</span>
-                    <input
-                      type="checkbox"
-                      checked={accelConfig.use_throttle_protection}
-                      onChange={(e) => setAccelConfig({ ...accelConfig, use_throttle_protection: e.target.checked })}
-                      className="w-5 h-5 rounded bg-[var(--color-surface-muted)] border-[var(--color-border)] text-primary focus:ring-primary focus:ring-offset-0"
-                    />
-                  </label>
+                    <div className="flex justify-between text-xs mt-3">
+                      <span className="text-[var(--color-text-muted)]">🐢 1</span>
+                      <span className="text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded">⚡ 16 Ideal for YouTube</span>
+                      <span className="text-[var(--color-text-muted)]">🚀 32</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Save Button */}
               <button
                 onClick={handleSaveAll}
-                className="w-full py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] rounded-lg font-medium transition-colors"
+                disabled={saveSuccess}
+                className={`w-full py-3 rounded-lg font-medium transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${saveSuccess
+                  ? 'bg-green-500 text-white'
+                  : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] hover:scale-[1.02] active:scale-[0.98]'
+                  }`}
               >
-                Save Settings
+                {saveSuccess ? (
+                  <>
+                    <span className="text-lg">✓</span>
+                    Saved!
+                  </>
+                ) : (
+                  'Save Settings'
+                )}
               </button>
             </div>
-          )}
+          )
+          }
 
-          {activeTab === "downloads" && (
-            <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8">
-              <div className="pt-8 pb-6 flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Downloads</h1>
-                  <p className="text-[var(--color-text-secondary)]">Your download history</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={fetchHistory}
-                    className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                    title="Refresh"
-                  >
-                    <RefreshIcon />
-                  </button>
-                  {records.length > 0 && (
+          {
+            activeTab === "downloads" && (
+              <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8">
+                <div className="pt-8 pb-6 flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Downloads</h1>
+                    <p className="text-[var(--color-text-secondary)]">Your download history</p>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={clearHistory}
-                      className="p-2 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                      title="Clear all history"
+                      onClick={fetchHistory}
+                      className="p-2 text-[var(--color-text-muted)] hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      title="Refresh"
                     >
-                      <DeleteSweepIcon />
+                      <RefreshIcon />
                     </button>
-                  )}
+                    {records.length > 0 && (
+                      <button
+                        onClick={clearHistory}
+                        className="p-2 text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        title="Clear all history"
+                      >
+                        <DeleteSweepIcon />
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Filter tabs */}
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={() => setPlatformFilter("all")}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${platformFilter === "all"
+                      ? "bg-primary text-[var(--color-text-on-accent)]"
+                      : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
+                      }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setPlatformFilter("youtube")}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${platformFilter === "youtube"
+                      ? "bg-red-600 text-white"
+                      : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
+                      }`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                    </svg>
+                    YouTube
+                  </button>
+                  <button
+                    onClick={() => setPlatformFilter("instagram")}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${platformFilter === "instagram"
+                      ? "bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 text-white"
+                      : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
+                      }`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                    </svg>
+                    Instagram
+                  </button>
+                </div>
+
+                {historyLoading ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <LoadingIcon size={36} className="animate-spin text-primary" />
+                  </div>
+                ) : records.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
+                    <FolderOpenIcon size={64} className="mb-4 opacity-30" />
+                    <p className="text-sm">No downloads yet</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {records
+                      .filter(record => platformFilter === "all" || (record.platform || "youtube") === platformFilter)
+                      .map((record) => (
+                        <DownloadHistoryItem
+                          key={record.id}
+                          record={record}
+                          onOpenFile={openFile}
+                          onOpenFolder={openInFolder}
+                          onDelete={deleteRecord}
+                        />
+                      ))}
+                  </div>
+                )}
               </div>
+            )
+          }
 
-              {/* Filter tabs */}
-              <div className="flex items-center gap-2 mb-4">
-                <button
-                  onClick={() => setPlatformFilter("all")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${platformFilter === "all"
-                    ? "bg-primary text-[var(--color-text-on-accent)]"
-                    : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
-                    }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setPlatformFilter("youtube")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${platformFilter === "youtube"
-                    ? "bg-red-600 text-white"
-                    : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
-                    }`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                  </svg>
-                  YouTube
-                </button>
-                <button
-                  onClick={() => setPlatformFilter("instagram")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${platformFilter === "instagram"
-                    ? "bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 text-white"
-                    : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-elevated)]"
-                    }`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
-                  </svg>
-                  Instagram
-                </button>
-              </div>
+          {
+            activeTab === "update" && (
+              <UpdateTab
+                updateInfo={updateInfo}
+                updateLoading={updateLoading}
+                updateError={updateError}
+                lastChecked={lastChecked}
+                onCheckUpdate={handleCheckUpdate}
+                onInstallUpdate={handleInstallUpdate}
+                isInstalling={isInstalling}
+                downloadProgress={downloadProgress}
+                onDownloadExternal={(url) => handleDownloadUpdate(url)}
+              />
+            )
+          }
+        </main >
 
-              {historyLoading ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <LoadingIcon size={36} className="animate-spin text-primary" />
-                </div>
-              ) : records.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] py-16">
-                  <FolderOpenIcon size={64} className="mb-4 opacity-30" />
-                  <p className="text-sm">No downloads yet</p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {records
-                    .filter(record => platformFilter === "all" || (record.platform || "youtube") === platformFilter)
-                    .map((record) => (
-                      <DownloadHistoryItem
-                        key={record.id}
-                        record={record}
-                        onOpenFile={openFile}
-                        onOpenFolder={openInFolder}
-                        onDelete={deleteRecord}
-                      />
-                    ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "update" && (
-            <UpdateTab
-              updateInfo={updateInfo}
-              updateLoading={updateLoading}
-              updateError={updateError}
-              lastChecked={lastChecked}
-              onCheckUpdate={handleCheckUpdate}
-              onInstallUpdate={handleInstallUpdate}
-              isInstalling={isInstalling}
-              downloadProgress={downloadProgress}
-              onDownloadExternal={(url) => handleDownloadUpdate(url)}
-            />
-          )}
-        </main>
-
-      </div>
+      </div >
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} hasUpdate={updateInfo?.update_available} />
-    </div>
+      < BottomNav activeTab={activeTab} onTabChange={setActiveTab} hasUpdate={updateInfo?.update_available} />
+    </div >
   );
 }
 
