@@ -212,12 +212,18 @@ pub async fn download_video_with_child(
     if platform == Platform::Instagram {
         // --parse-metadata: extract first line before any newline from description as title
         // --trim-filenames: limit filename length to avoid Windows path length errors
+        // --postprocessor-args: force H.264 video + AAC audio for DaVinci Resolve compatibility
         args.extend([
             "--parse-metadata".to_string(),
             "description:(?s)(?P<title>[^\\n]+)".to_string(),
             "--trim-filenames".to_string(),
             "80".to_string(),  // Limit filenames to 80 chars (safe for all platforms)
+            "--recode-video".to_string(),
+            "mp4".to_string(),
+            "--postprocessor-args".to_string(),
+            "ffmpeg:-c:v libx264 -preset medium -crf 23 -c:a aac -b:a 192k".to_string(),
         ]);
+        eprintln!("[DEBUG] Instagram video - will re-encode to H.264/AAC for editor compatibility");
     }
 
     if use_aria2c {
