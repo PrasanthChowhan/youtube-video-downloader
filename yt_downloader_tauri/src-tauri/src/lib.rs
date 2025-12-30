@@ -1142,6 +1142,10 @@ async fn run_download_task(
                                 break;
                             }
                             None => break,
+                            Some(tauri_plugin_shell::process::CommandEvent::Stderr(line_bytes)) => {
+                                let line = String::from_utf8_lossy(&line_bytes);
+                                eprintln!("[YT-DLP STDERR] {}", line);
+                            }
                             _ => {}
                         }
                     }

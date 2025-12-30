@@ -6100,7 +6100,7 @@ dependencies = [
 
 [[package]]
 name = "yt_downloader_tauri"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
