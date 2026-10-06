@@ -43,6 +43,12 @@ export const SystemUpdateIcon: React.FC<IconProps> = (props) => (
     </IconBase>
 );
 
+export const TranscribeIcon: React.FC<IconProps> = (props) => (
+    <IconBase {...props}>
+        <path d="M20,4H4C2.9,4,2,4.9,2,6v12c0,1.1,0.9,2,2,2h16c1.1,0,2-0.9,2-2V6C22,4.9,21.1,4,20,4z M4,12h4v2H4V12z M14,16H4v-2h10V16z M20,16h-4v-2h4V16z M20,12h-10v-2h10V12z" />
+    </IconBase>
+);
+
 // General UI Icons
 export const IconLink: React.FC<IconProps> = (props) => (
     <IconBase {...props}>

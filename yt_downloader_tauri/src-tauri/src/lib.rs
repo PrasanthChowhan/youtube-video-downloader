@@ -14,7 +14,9 @@ mod response;
 mod settings;
 mod thumbnail_cache;
 mod updater;
+mod whisper;
 
+use tauri_plugin_shell::ShellExt;
 use acceleration_config::AccelerationConfig;
 use download_history::{DownloadHistory, DownloadRecord, DownloadStatus as HistoryStatus};
 use download_manager::{
@@ -254,6 +256,63 @@ fn get_settings() -> CommandResponse<AppSettings> {
 #[tauri::command]
 fn save_settings(settings: AppSettings) -> CommandResponse<()> {
     save_settings_to_file(&settings).into()
+}
+
+/// Export cookies from browser to a text file using yt-dlp
+#[tauri::command]
+async fn export_browser_cookies(app: AppHandle, browser: String) -> CommandResponse<String> {
+    if browser.is_empty() || browser == "disabled" || browser == "none" {
+        return CommandResponse::err("Please select a browser first".to_string());
+    }
+
+    let config_dir = match dirs::config_local_dir() {
+        Some(dir) => dir.join("yt-downloader"),
+        None => PathBuf::from("."),
+    };
+    let _ = std::fs::create_dir_all(&config_dir);
+    let cookies_file = config_dir.join("cookies.txt");
+    let cookies_file_str = cookies_file.to_string_lossy().to_string();
+
+    let output = app
+        .shell()
+        .sidecar("yt-dlp");
+
+    let command = match output {
+        Ok(cmd) => cmd.args([
+            "--cookies-from-browser",
+            &browser,
+            "--cookies",
+            &cookies_file_str,
+            "--no-download",
+            "--no-warnings",
+            "https://www.youtube.com",
+        ]),
+        Err(e) => return CommandResponse::err(format!("Failed to spawn yt-dlp sidecar: {}", e)),
+    };
+
+    let result = command.output().await;
+    match result {
+        Ok(out) => {
+            if out.status.success() || cookies_file.exists() {
+                // Update settings with new cookies file path
+                let mut settings = load_settings();
+                settings.cookies_file_path = cookies_file_str.clone();
+                let _ = save_settings_to_file(&settings);
+                CommandResponse::ok(cookies_file_str)
+            } else {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                if stderr.contains("Could not copy") || stderr.contains("database") {
+                    CommandResponse::err(format!(
+                        "Could not read cookies from {}. Please close {} completely for 2 seconds and try again.",
+                        browser, browser
+                    ))
+                } else {
+                    CommandResponse::err(format!("yt-dlp cookie export error: {}", stderr))
+                }
+            }
+        }
+        Err(e) => CommandResponse::err(format!("Failed to execute cookie export: {}", e)),
+    }
 }
 
 /// Get acceleration configuration
@@ -748,6 +807,9 @@ pub fn run() {
                 if let Err(e) = ensure_aria2c_available().await {
                     eprintln!("Failed to ensure aria2c is available: {}", e);
                 }
+                if let Err(e) = binary_downloader::ensure_whisper_cli().await {
+                    eprintln!("Failed to ensure whisper-cli is available: {}", e);
+                }
             });
             Ok(())
         })
@@ -758,6 +820,7 @@ pub fn run() {
             get_default_download_path,
             get_settings,
             save_settings,
+            export_browser_cookies,
             get_acceleration_config,
             set_acceleration_config,
             // Download history commands
@@ -785,6 +848,11 @@ pub fn run() {
             // Auto-update commands
             check_for_updates,
             open_update_page,
+            // Whisper commands
+            whisper::get_available_models,
+            whisper::download_whisper_model,
+            whisper::import_custom_model,
+            whisper::transcribe_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1135,6 +1203,20 @@ async fn run_download_task(
                                         };
                                         let _ = download_history::add_record(record);
                                         let _ = app.emit("history-updated", ());
+
+                                        // Trigger auto-transcription if enabled in settings
+                                        if settings.auto_transcribe {
+                                            if let Some(file_path) = last_filename.clone() {
+                                                let app_handle = app.clone();
+                                                let model_name = settings.whisper_model.clone();
+                                                let export_json = settings.export_word_timestamps;
+                                                let export_srt = settings.export_srt;
+                                                tauri::async_runtime::spawn(async move {
+                                                    eprintln!("[INFO] Auto-transcribing downloaded file: {}", file_path);
+                                                    let _ = whisper::transcribe_file(app_handle, file_path, model_name, Some("auto".to_string()), Some(export_json), Some(export_srt)).await;
+                                                });
+                                            }
+                                        }
                                     } else {
                                         manager.update_status(&item_id, DownloadStatus::Failed, Some(format!("Exit code: {}", code)));
                                     }

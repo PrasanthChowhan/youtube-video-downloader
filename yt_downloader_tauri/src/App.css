@@ -58,7 +58,7 @@
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-bounce: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-bounce: 400ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Semantic States */
   --color-success: #4ade80;
@@ -125,7 +125,7 @@
   --color-background-dark: var(--color-bg);
   --color-surface-dark: var(--color-surface);
   --color-surface-light: rgba(255, 255, 255, 0.72);
-  --font-family-display: "Inter", system-ui, sans-serif;
+  --font-family-display: "Manrope", system-ui, sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -135,7 +135,7 @@
 body {
   background: var(--color-bg);
   color: var(--color-text-primary);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;

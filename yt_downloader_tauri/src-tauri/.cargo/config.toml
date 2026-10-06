@@ -1,0 +1,7 @@
+[build]
+target-dir = "C:/tmp/ytdl_target"
+
+[env]
+CMAKE = "C:\\Program Files\\CMake\\bin\\cmake.exe"
+LIBCLANG_PATH = "C:\\Program Files\\LLVM\\bin"
+VULKAN_SDK = "C:\\tmp\\VulkanSDK"

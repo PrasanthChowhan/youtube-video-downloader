@@ -181,3 +181,170 @@ pub fn get_ffmpeg_path() -> Result<PathBuf, String> {
 
     Ok(path)
 }
+
+const WHISPER_CLI_VERSION: &str = "1.6.0";
+#[cfg(target_os = "windows")]
+const WHISPER_CLI_URL: &str = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.6.0/whisper-cublas-12.2.0-bin-x64.zip";
+#[cfg(not(target_os = "windows"))]
+const WHISPER_CLI_URL: &str = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.6.0/whisper-bin-x64.zip";
+
+/// Get the path to whisper CLI binary
+pub fn get_whisper_cli_path() -> Result<PathBuf, String> {
+    let bin_dir = get_binary_dir()?;
+
+    #[cfg(target_os = "windows")]
+    let binary_name = "whisper-cli-x86_64-pc-windows-msvc.exe";
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let binary_name = "whisper-cli-aarch64-apple-darwin";
+
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let binary_name = "whisper-cli-x86_64-apple-darwin";
+
+    #[cfg(target_os = "linux")]
+    let binary_name = "whisper-cli-x86_64-unknown-linux-gnu";
+
+    let path = bin_dir.join(binary_name);
+    if !path.exists() {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                let sibling_path = exe_dir.join(binary_name);
+                if sibling_path.exists() {
+                    return Ok(sibling_path);
+                }
+            }
+        }
+    }
+
+    Ok(path)
+}
+
+/// Check if whisper CLI is installed (and check for CUDA DLLs on Windows)
+pub fn is_whisper_cli_installed() -> bool {
+    match get_whisper_cli_path() {
+        Ok(path) => {
+            if !path.exists() {
+                return false;
+            }
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(parent) = path.parent() {
+                    let cuda_dll = parent.join("cublas64_12.dll");
+                    if !cuda_dll.exists() {
+                        return false; // Force re-download to upgrade to cuBLAS GPU build
+                    }
+                }
+            }
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Download and extract whisper-cli binary
+pub async fn download_whisper_cli() -> Result<(), String> {
+    eprintln!("Downloading whisper-cli v{}...", WHISPER_CLI_VERSION);
+
+    let binary_path = get_whisper_cli_path()?;
+    let bin_dir = binary_path
+        .parent()
+        .ok_or("Failed to get binary directory")?;
+
+    fs::create_dir_all(bin_dir)
+        .map_err(|e| format!("Failed to create binaries directory: {}", e))?;
+
+    let response = reqwest::get(WHISPER_CLI_URL)
+        .await
+        .map_err(|e| format!("Failed to download whisper-cli: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to download whisper-cli: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let zip_bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read whisper-cli download: {}", e))?;
+
+    extract_whisper_cli_from_zip(&zip_bytes, &binary_path, bin_dir)?;
+
+    eprintln!(
+        "whisper-cli v{} downloaded successfully to {:?}",
+        WHISPER_CLI_VERSION, binary_path
+    );
+    Ok(())
+}
+
+/// Extract whisper main executable and dependencies from ZIP
+fn extract_whisper_cli_from_zip(
+    zip_bytes: &[u8],
+    target_path: &PathBuf,
+    bin_dir: &std::path::Path,
+) -> Result<(), String> {
+    use std::io::{Cursor, Read};
+    use zip::ZipArchive;
+
+    let reader = Cursor::new(zip_bytes);
+    let mut archive =
+        ZipArchive::new(reader).map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+
+    let mut main_found = false;
+
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
+
+        let file_name = file.name().to_string();
+        if file_name.ends_with("main.exe") || file_name.ends_with("whisper-cli.exe") || file_name.ends_with("whisper-cli") {
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents)
+                .map_err(|e| format!("Failed to read main binary from ZIP: {}", e))?;
+
+            fs::write(target_path, contents)
+                .map_err(|e| format!("Failed to write whisper binary: {}", e))?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(target_path)
+                    .map_err(|e| format!("Failed to get file metadata: {}", e))?
+                    .permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(target_path, perms)
+                    .map_err(|e| format!("Failed to set executable permissions: {}", e))?;
+            }
+
+            main_found = true;
+        } else if file_name.ends_with(".dll") {
+            if let Some(name) = std::path::Path::new(&file_name).file_name() {
+                let dest = bin_dir.join(name);
+                let mut contents = Vec::new();
+                file.read_to_end(&mut contents)
+                    .map_err(|e| format!("Failed to read DLL from ZIP: {}", e))?;
+                let _ = fs::write(dest, contents);
+            }
+        }
+    }
+
+    if main_found {
+        Ok(())
+    } else {
+        Err("whisper binary executable not found in ZIP archive".to_string())
+    }
+}
+
+/// Ensure whisper-cli is available (download if missing)
+pub async fn ensure_whisper_cli() -> Result<(), String> {
+    if is_whisper_cli_installed() {
+        eprintln!("whisper-cli is already installed");
+        Ok(())
+    } else {
+        eprintln!("whisper-cli not found, downloading...");
+        download_whisper_cli().await
+    }
+}
+

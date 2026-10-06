@@ -29,6 +29,7 @@ export const UrlInput: React.FC<UrlInputProps> = ({
                 </div>
                 <input
                     type="text"
+                    aria-label="Video URL"
                     value={url}
                     onChange={(e) => onUrlChange(e.target.value)}
                     onKeyDown={handleKeyDown}

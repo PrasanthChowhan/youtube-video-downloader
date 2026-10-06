@@ -195,13 +195,14 @@ mod tests {
     fn test_validation() {
         let mut config = AccelerationConfig {
             enabled: true,
-            max_concurrent_fragments: 20, // Too high
+            max_concurrent_fragments: 50, // Too high (max 32)
             use_throttle_protection: true,
             min_file_size_mb: 0, // Too low
+            ..AccelerationConfig::default()
         };
 
         config.validate();
-        assert_eq!(config.max_concurrent_fragments, 8); // Clamped
+        assert_eq!(config.max_concurrent_fragments, 32); // Clamped
         assert_eq!(config.min_file_size_mb, 1); // Fixed
     }
 

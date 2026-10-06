@@ -4,10 +4,11 @@ import {
     SettingsIcon,
     SmartDisplayIcon,
     FolderIcon,
+    TranscribeIcon,
     SystemUpdateIcon
 } from "./Icons";
 
-type Tab = "settings" | "youtube" | "downloads" | "update";
+type Tab = "settings" | "youtube" | "downloads" | "transcribe" | "update";
 
 interface BottomNavProps {
     activeTab: Tab;
@@ -20,12 +21,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, ha
         { id: "settings" as Tab, Icon: SettingsIcon, label: "Settings" },
         { id: "youtube" as Tab, Icon: SmartDisplayIcon, label: "YouTube" },
         { id: "downloads" as Tab, Icon: FolderIcon, label: "Downloads" },
+        { id: "transcribe" as Tab, Icon: TranscribeIcon, label: "Transcribe" },
         { id: "update" as Tab, Icon: SystemUpdateIcon, label: "Update" },
     ];
 
     return (
-        <nav className="absolute bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md mx-auto border border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-xl py-2 rounded-2xl shadow-2xl z-50">
-            <div className="grid grid-cols-4 items-center px-2">
+        <nav className="absolute bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-lg mx-auto border border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-xl py-2 rounded-2xl shadow-2xl z-50">
+            <div className="grid grid-cols-5 items-center px-2">
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
                     const showBadge = tab.id === "update" && hasUpdate && !isActive;

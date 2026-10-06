@@ -35,50 +35,111 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
         _ => url.to_string(),
     };
 
+    let settings = crate::settings::load_settings();
+    let mut args = vec![
+        "--dump-json".to_string(),
+        "--no-download".to_string(),
+        "--no-warnings".to_string(),
+        "--no-playlist".to_string(),
+    ];
+
+    if !settings.cookies_file_path.is_empty()
+        && std::path::Path::new(&settings.cookies_file_path).exists()
+    {
+        args.push("--cookies".to_string());
+        args.push(settings.cookies_file_path.clone());
+    } else if !settings.cookies_from_browser.is_empty()
+        && settings.cookies_from_browser != "disabled"
+        && settings.cookies_from_browser != "none"
+    {
+        args.push("--cookies-from-browser".to_string());
+        args.push(settings.cookies_from_browser.clone());
+    }
+
+    args.push(cleaned_url.clone());
+
     let command = app
         .shell()
         .sidecar("yt-dlp")
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-        .args([
-            "--dump-json",
-            "--no-download",
-            "--no-warnings",
-            "--no-playlist",
-            &cleaned_url,
-        ]);
+        .args(args);
 
     let output = command
         .output()
         .await
         .map_err(|e| format!("Failed to run yt-dlp sidecar: {}", e))?;
 
-    if !output.status.success() {
+    let json_str = if output.status.success() {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("yt-dlp error: {}", stderr));
-    }
+        let mut recovered_json = None;
 
-    let json_str = String::from_utf8_lossy(&output.stdout);
+        // Zero-User-Input Auto-Retry pipeline: If YouTube demands bot check / cookies, auto-try installed browsers
+        if stderr.contains("bot")
+            || stderr.contains("Sign in")
+            || stderr.contains("cookies")
+            || stderr.contains("Could not copy")
+        {
+            let browsers = ["brave", "chrome", "edge", "firefox"];
+            for browser in browsers {
+                eprintln!(
+                    "[AUTO-RETRY] YouTube anti-bot triggered. Auto-trying browser cookies: {}",
+                    browser
+                );
+
+                let retry_args = vec![
+                    "--dump-json".to_string(),
+                    "--no-download".to_string(),
+                    "--no-warnings".to_string(),
+                    "--no-playlist".to_string(),
+                    "--cookies-from-browser".to_string(),
+                    browser.to_string(),
+                    cleaned_url.clone(),
+                ];
+
+                if let Ok(retry_cmd) = app.shell().sidecar("yt-dlp") {
+                    if let Ok(retry_out) = retry_cmd.args(retry_args).output().await {
+                        if retry_out.status.success() {
+                            // We intentionally DO NOT auto-save this to settings.json anymore, 
+                            // because it causes future downloads to fail if the browser is running and locks the database.
+                            eprintln!("[AUTO-RETRY] Successfully bypassed YouTube anti-bot using {} cookies (not saving permanently)!", browser);
+                            recovered_json = Some(String::from_utf8_lossy(&retry_out.stdout).to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        match recovered_json {
+            Some(js) => js,
+            None => return Err(format!("yt-dlp error: {}", stderr)),
+        }
+    };
+
     let json: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse yt-dlp output: {}", e))?;
 
-    // For Instagram, use the first line of description as title (this is how IG captions work)
+    Ok(parse_video_info_json(json, platform, url))
+}
+
+/// Helper to parse VideoInfo struct from yt-dlp JSON
+fn parse_video_info_json(json: serde_json::Value, platform: Platform, url: &str) -> VideoInfo {
     let title = if platform == Platform::Instagram {
         let description = json["description"].as_str().unwrap_or("");
-        // Get the first line (before any newline) - this is typically the "title" part of an IG caption
         let first_line = description.lines().next().unwrap_or("");
         if !first_line.is_empty() && first_line.len() > 5 {
-            // Truncate to 80 chars max for filename safety
             let truncated: String = first_line.chars().take(80).collect();
             truncated.trim().to_string()
         } else {
-            // Fallback to yt-dlp title if description is empty
             json["title"].as_str().unwrap_or("Unknown").to_string()
         }
     } else {
         json["title"].as_str().unwrap_or("Unknown").to_string()
     };
 
-    Ok(VideoInfo {
+    VideoInfo {
         id: json["id"].as_str().unwrap_or("").to_string(),
         title,
         uploader: json["uploader"].as_str().unwrap_or("Unknown").to_string(),
@@ -92,7 +153,7 @@ pub async fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo, S
         filesize_approx: json["filesize_approx"].as_u64(),
         url: url.to_string(),
         platform,
-    })
+    }
 }
 
 /// Downloads a video with progress updates.
@@ -194,6 +255,33 @@ pub async fn download_video_with_child(
         "--progress-template".to_string(),
         "download:%(progress.percent)s|%(progress.speed)s|%(progress.eta)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s".to_string(),
     ];
+
+    // Add browser cookies or cookies file to bypass YouTube anti-bot checks if configured
+    let settings = crate::settings::load_settings();
+    if !settings.cookies_file_path.is_empty()
+        && std::path::Path::new(&settings.cookies_file_path).exists()
+    {
+        args.extend([
+            "--cookies".to_string(),
+            settings.cookies_file_path.clone(),
+        ]);
+        eprintln!(
+            "[DEBUG] Using cookies file: {}",
+            settings.cookies_file_path
+        );
+    } else if !settings.cookies_from_browser.is_empty()
+        && settings.cookies_from_browser != "disabled"
+        && settings.cookies_from_browser != "none"
+    {
+        args.extend([
+            "--cookies-from-browser".to_string(),
+            settings.cookies_from_browser.clone(),
+        ]);
+        eprintln!(
+            "[DEBUG] Using browser cookies from: {}",
+            settings.cookies_from_browser
+        );
+    }
 
     // Add ffmpeg location so yt-dlp can find it for merging audio/video
     // This is essential for bundled apps on Mac where ffmpeg isn't in PATH

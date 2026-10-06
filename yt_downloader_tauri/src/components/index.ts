@@ -7,3 +7,4 @@ export { DownloadHistoryItem } from "./DownloadHistoryItem";
 export * from "./Icons";
 export { SortableQueueItem } from "./SortableQueueItem";
 export { UpdateTab } from "./UpdateTab";
+export { WhisperSettings } from "./WhisperSettings";

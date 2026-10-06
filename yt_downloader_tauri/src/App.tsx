@@ -13,14 +13,14 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
 import type { ThemeOption } from "./hooks";
 import {
-  UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab,
+  UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab, WhisperSettings,
   DownloadIcon, PaletteIcon, FolderIcon, FolderOpenIcon, FolderSearchIcon, BoltIcon, InfoIcon,
   RocketLaunchIcon, RefreshIcon, DeleteSweepIcon, LoadingIcon
 } from "./components";
 import type { AccelerationConfig, CommandResponse, Platform, UpdateInfo } from "./types";
 import "./App.css";
 
-type Tab = "settings" | "youtube" | "downloads" | "update";
+type Tab = "settings" | "youtube" | "downloads" | "transcribe" | "update";
 
 function App() {
   const [url, setUrl] = useState("");
@@ -48,6 +48,8 @@ function App() {
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isInstalling, setIsInstalling] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [exportingCookies, setExportingCookies] = useState(false);
+  const [cookieStatus, setCookieStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   // Hooks
   const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
@@ -133,6 +135,47 @@ function App() {
       setOutputPath(selected as string);
     }
   }, [outputPath, setOutputPath]);
+
+  /**
+   * Browse for cookies.txt file
+   */
+  const handleBrowseCookiesFile = useCallback(async () => {
+    const selected = await open({
+      multiple: false,
+      title: "Select cookies.txt File",
+      filters: [{ name: "Text / Cookie Files", extensions: ["txt", "cookies"] }],
+    });
+    if (selected) {
+      updateSettings({ cookies_file_path: selected as string });
+    }
+  }, [updateSettings]);
+
+  /**
+   * Auto-export cookies from selected browser to cookies.txt
+   */
+  const handleExportCookies = useCallback(async () => {
+    if (!settings.cookies_from_browser) {
+      setCookieStatus({ type: "error", msg: "Please select a browser first." });
+      return;
+    }
+    setExportingCookies(true);
+    setCookieStatus(null);
+    try {
+      const res = await invoke<CommandResponse<string>>("export_browser_cookies", {
+        browser: settings.cookies_from_browser,
+      });
+      if (res.success && res.data) {
+        updateSettings({ cookies_file_path: res.data });
+        setCookieStatus({ type: "success", msg: "Successfully exported cookies.txt! Browser lock will no longer block downloads." });
+      } else {
+        setCookieStatus({ type: "error", msg: res.error || "Failed to export cookies." });
+      }
+    } catch (e: any) {
+      setCookieStatus({ type: "error", msg: e.message || String(e) });
+    } finally {
+      setExportingCookies(false);
+    }
+  }, [settings.cookies_from_browser, updateSettings]);
 
   /**
    * Handle download button click (Add to Queue)
@@ -254,7 +297,6 @@ function App() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col items-center">
@@ -405,6 +447,77 @@ function App() {
                       <option value="%(upload_date)s - %(title)s.%(ext)s">Date - Title</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-[var(--color-text-secondary)]">
+                      YouTube Cookies File (cookies.txt)
+                    </label>
+                    <div className="flex gap-3 mb-1.5">
+                      <input
+                        type="text"
+                        value={settings.cookies_file_path || ""}
+                        onChange={(e) => updateSettings({ cookies_file_path: e.target.value })}
+                        className="flex-1 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] text-sm"
+                        placeholder="Path to exported cookies.txt file"
+                      />
+                      <button
+                        onClick={handleBrowseCookiesFile}
+                        className="px-4 py-3 bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-surface-elevated)] transition-colors text-[var(--color-text-primary)] text-sm flex items-center gap-1.5"
+                      >
+                        <FolderSearchIcon />
+                        Browse...
+                      </button>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Exported cookies file from extensions like "Get cookies.txt LOCALLY". Works 100% reliably even when browser is running.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-[var(--color-text-secondary)]">
+                      Bypass YouTube Anti-Bot (Extract from Browser)
+                    </label>
+                    <select
+                      value={settings.cookies_from_browser || ""}
+                      onChange={(e) => updateSettings({ cookies_from_browser: e.target.value })}
+                      className="w-full bg-[var(--color-surface-muted)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                    >
+                      <option value="">Disabled (Default)</option>
+                      <option value="brave">Brave Browser</option>
+                      <option value="chrome">Google Chrome</option>
+                      <option value="edge">Microsoft Edge</option>
+                      <option value="firefox">Mozilla Firefox</option>
+                      <option value="opera">Opera</option>
+                      <option value="vivaldi">Vivaldi</option>
+                      <option value="safari">Safari (macOS)</option>
+                    </select>
+                    <div className="flex items-center gap-3 mt-3">
+                      <button
+                        onClick={handleExportCookies}
+                        disabled={exportingCookies || !settings.cookies_from_browser}
+                        className="px-4 py-2.5 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        {exportingCookies ? "Exporting..." : `Export ${settings.cookies_from_browser || "Browser"} Cookies to File`}
+                      </button>
+                    </div>
+
+                    {cookieStatus && (
+                      <div className={`mt-3 p-3 rounded-lg text-xs border ${cookieStatus.type === "success" ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
+                        {cookieStatus.msg}
+                      </div>
+                    )}
+
+                    <details className="mt-3 p-3 rounded-lg bg-[var(--color-surface-elevated)] border border-[var(--color-border)] text-xs text-[var(--color-text-muted)] leading-relaxed cursor-pointer group">
+                      <summary className="font-semibold select-none flex items-center gap-2 text-[var(--color-text-primary)]">
+                        <span className="material-symbols-outlined text-[16px] text-primary">help</span>
+                        Connection Issues (Brave & Chrome)?
+                      </summary>
+                      <div className="mt-2 pt-2 border-t border-[var(--color-border)]">
+                        Brave & Chrome lock their cookie database on Windows while open. 
+                        You can click <b>Export Cookies to File</b> above (close browser for 2s first if needed) to generate a permanent <b>cookies.txt</b> file so you never need to close your browser again!
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </div>
 
@@ -447,25 +560,16 @@ function App() {
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <label className="text-base font-semibold text-[var(--color-text-primary)]">Download Speed</label>
-                          {/* Tooltip */}
-                          <div className="group relative">
-                            <span className="text-[var(--color-text-muted)] cursor-help">ⓘ</span>
-                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-lg z-10">
-                              <p className="text-xs text-[var(--color-text-secondary)] mb-2">
-                                <strong className="text-primary">For YouTube:</strong> Use 8-16 for best results. Higher may trigger rate limits.
-                              </p>
-                              <p className="text-xs text-[var(--color-text-secondary)]">
-                                <strong className="text-primary">For Direct Files:</strong> Use 16-32 for maximum speed.
-                              </p>
-                            </div>
-                          </div>
+                          <label className="text-base font-semibold text-[var(--color-text-primary)]">Speed Boost</label>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--color-accent-soft)] text-[var(--color-accent)] border border-[var(--color-accent)]/20">
+                            {accelConfig.max_concurrent_fragments > 16 ? 'EXTREME' : accelConfig.max_concurrent_fragments > 4 ? 'FAST' : 'STANDARD'}
+                          </span>
                         </div>
-                        <p className="text-xs text-[var(--color-text-muted)] mt-1">Controls parallel connections for faster downloads</p>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">Higher values improve speed but use more CPU</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex items-baseline justify-end gap-1">
                         <span className="text-3xl font-bold text-primary">{accelConfig.max_concurrent_fragments}</span>
-                        <p className="text-xs text-[var(--color-text-muted)]">connections</p>
+                        <p className="text-xs font-medium text-[var(--color-text-muted)]">x</p>
                       </div>
                     </div>
 
@@ -511,6 +615,12 @@ function App() {
               </button>
             </div>
           )
+          }
+
+          {
+            activeTab === "transcribe" && (
+              <WhisperSettings settings={settings} onUpdateSettings={updateSettings} />
+            )
           }
 
           {
@@ -625,9 +735,9 @@ function App() {
 
       </div >
       {/* Bottom Navigation */}
-      < BottomNav activeTab={activeTab} onTabChange={setActiveTab} hasUpdate={updateInfo?.update_available} />
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} hasUpdate={updateInfo?.update_available} />
     </div >
-  );
+    );
 }
 
 export default App;

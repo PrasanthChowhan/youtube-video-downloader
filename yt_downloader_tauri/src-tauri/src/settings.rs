@@ -6,11 +6,27 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+fn default_whisper_model() -> String {
+    "ggml-base.bin".to_string()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     pub download_path: String,
     pub filename_template: String,
     pub theme: String,
+    #[serde(default)]
+    pub auto_transcribe: bool,
+    #[serde(default = "default_whisper_model")]
+    pub whisper_model: String,
+    #[serde(default)]
+    pub export_word_timestamps: bool,
+    #[serde(default)]
+    pub export_srt: bool,
+    #[serde(default)]
+    pub cookies_from_browser: String,
+    #[serde(default)]
+    pub cookies_file_path: String,
 }
 
 impl Default for AppSettings {
@@ -20,6 +36,12 @@ impl Default for AppSettings {
             // Include %(id)s for uniqueness (especially for Instagram which has generic titles)
             filename_template: "%(uploader)s/%(title)s [%(id)s].%(ext)s".to_string(),
             theme: "dark".to_string(),
+            auto_transcribe: false,
+            whisper_model: default_whisper_model(),
+            export_word_timestamps: false,
+            export_srt: false,
+            cookies_from_browser: "".to_string(),
+            cookies_file_path: "".to_string(),
         }
     }
 }

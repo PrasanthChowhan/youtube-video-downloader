@@ -14,13 +14,13 @@ export const Header: React.FC<HeaderProps> = ({ title = "VideoGet" }) => {
                 <h2 className="text-lg font-bold leading-tight tracking-[-0.015em] text-[var(--color-text-primary)]">{title}</h2>
             </div>
             <div className="flex gap-2">
-                <button className="flex size-8 cursor-pointer items-center justify-center rounded-lg hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] transition-colors">
+                <button aria-label="Minimize" className="flex h-[44px] w-[44px] cursor-pointer items-center justify-center rounded-lg hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] transition-colors">
                     <span className="material-symbols-outlined text-[18px]">remove</span>
                 </button>
-                <button className="flex size-8 cursor-pointer items-center justify-center rounded-lg hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] transition-colors">
+                <button aria-label="Maximize" className="flex h-[44px] w-[44px] cursor-pointer items-center justify-center rounded-lg hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] transition-colors">
                     <span className="material-symbols-outlined text-[16px]">check_box_outline_blank</span>
                 </button>
-                <button className="flex size-8 cursor-pointer items-center justify-center rounded-lg hover:bg-red-500 hover:text-white text-[var(--color-text-primary)] transition-colors">
+                <button aria-label="Close" className="flex h-[44px] w-[44px] cursor-pointer items-center justify-center rounded-lg hover:bg-red-500 hover:text-white text-[var(--color-text-primary)] transition-colors">
                     <span className="material-symbols-outlined text-[18px]">close</span>
                 </button>
             </div>

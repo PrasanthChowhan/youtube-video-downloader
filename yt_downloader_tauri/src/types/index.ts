@@ -35,6 +35,26 @@ export interface AppSettings {
     download_path: string;
     filename_template: string;
     theme: string;
+    auto_transcribe?: boolean;
+    whisper_model?: string;
+    export_word_timestamps?: boolean;
+    export_srt?: boolean;
+    cookies_from_browser?: string;
+    cookies_file_path?: string;
+}
+
+export interface WhisperModel {
+    name: string;
+    path: string;
+    size_bytes: number;
+    is_downloaded: boolean;
+}
+
+export interface WhisperProgress {
+    status: string;
+    percent: number;
+    current_file?: string;
+    error?: string;
 }
 
 export interface AccelerationConfig {

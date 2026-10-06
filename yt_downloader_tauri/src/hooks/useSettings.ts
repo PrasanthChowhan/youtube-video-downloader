@@ -8,6 +8,12 @@ const DEFAULT_SETTINGS: AppSettings = {
     download_path: "",
     filename_template: "%(uploader)s/%(title)s.%(ext)s",
     theme: "dark",
+    auto_transcribe: false,
+    whisper_model: "ggml-base.bin",
+    export_word_timestamps: false,
+    export_srt: false,
+    cookies_from_browser: "",
+    cookies_file_path: "",
 };
 
 export function useSettings() {
