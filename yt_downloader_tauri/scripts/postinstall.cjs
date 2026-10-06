@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const BINARIES_DIR = path.join(__dirname, 'src-tauri', 'binaries');
+const BINARIES_DIR = path.join(__dirname, '..', 'src-tauri', 'binaries');
 
 const BINARIES = {
     'yt-dlp': {
