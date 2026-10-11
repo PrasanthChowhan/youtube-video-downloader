@@ -72,3 +72,10 @@ downloads/
 *.temp
 temp/
 tmp/
+
+# Agent files
+.agent/
+.github/agents/
+.github/hooks/
+.github/skills/
+

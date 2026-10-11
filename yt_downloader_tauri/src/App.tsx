@@ -13,7 +13,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useSettings, useDownloadHistory, useDownloadManager, useTheme } from "./hooks";
 import type { ThemeOption } from "./hooks";
 import {
-  UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab, WhisperSettings,
+  UrlInput, BottomNav, DownloadHistoryItem, SortableQueueItem, UpdateTab, WhisperSettings, AutoSaveBadge,
   DownloadIcon, PaletteIcon, FolderIcon, FolderOpenIcon, FolderSearchIcon, BoltIcon, InfoIcon,
   RocketLaunchIcon, RefreshIcon, DeleteSweepIcon, LoadingIcon
 } from "./components";
@@ -47,12 +47,11 @@ function App() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [exportingCookies, setExportingCookies] = useState(false);
   const [cookieStatus, setCookieStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   // Hooks
-  const { settings, outputPath, setOutputPath, updateSettings, saveSettings } = useSettings();
+  const { settings, outputPath, setOutputPath, updateSettings, lastSaved, saveStatus } = useSettings();
   const { records, isLoading: historyLoading, fetchHistory, deleteRecord, clearHistory, openFile, openInFolder } = useDownloadHistory();
   const { theme, setTheme } = useTheme();
 
@@ -190,22 +189,9 @@ function App() {
     }
   }, [url, managerAddToQueue]);
 
-  /**
-   * Save acceleration config
-   */
-  const handleSaveAccelConfig = useCallback(async () => {
-    await invoke("set_acceleration_config", { config: accelConfig });
-  }, [accelConfig]);
 
-  /**
-   * Save all settings
-   */
-  const handleSaveAll = useCallback(async () => {
-    await saveSettings();
-    await handleSaveAccelConfig();
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2000);
-  }, [saveSettings, handleSaveAccelConfig]);
+
+
 
   /**
    * Check for updates from GitHub
@@ -377,9 +363,12 @@ function App() {
 
           {activeTab === "settings" && (
             <div className="w-full max-w-[800px] flex flex-col flex-1 px-4 pt-8 pb-32 md:px-8">
-              <div className="pt-8 pb-6">
-                <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Settings</h1>
-                <p className="text-[var(--color-text-secondary)]">Configure download options</p>
+              <div className="pt-8 pb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold mb-2 text-[var(--color-text-primary)]">Settings</h1>
+                  <p className="text-[var(--color-text-secondary)]">Configure download and app preferences</p>
+                </div>
+                <AutoSaveBadge status={saveStatus} lastSaved={lastSaved} />
               </div>
 
               {/* Appearance Settings */}
@@ -579,7 +568,12 @@ function App() {
                       max="32"
                       step="1"
                       value={accelConfig.max_concurrent_fragments}
-                      onChange={(e) => setAccelConfig({ ...accelConfig, max_concurrent_fragments: parseInt(e.target.value) })}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        const updated = { ...accelConfig, max_concurrent_fragments: val };
+                        setAccelConfig(updated);
+                        invoke("set_acceleration_config", { config: updated }).catch(console.error);
+                      }}
                       className="w-full h-2 rounded-lg cursor-pointer accent-primary"
                       style={{
                         background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) ${((accelConfig.max_concurrent_fragments - 1) / 31) * 100}%, var(--color-border) ${((accelConfig.max_concurrent_fragments - 1) / 31) * 100}%, var(--color-border) 100%)`
@@ -595,31 +589,17 @@ function App() {
                 </div>
               </div>
 
-              {/* Save Button */}
-              <button
-                onClick={handleSaveAll}
-                disabled={saveSuccess}
-                className={`w-full py-3 rounded-lg font-medium transition-all duration-300 cursor-pointer flex items-center justify-center gap-2 ${saveSuccess
-                  ? 'bg-green-500 text-white'
-                  : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] hover:scale-[1.02] active:scale-[0.98]'
-                  }`}
-              >
-                {saveSuccess ? (
-                  <>
-                    <span className="text-lg">✓</span>
-                    Saved!
-                  </>
-                ) : (
-                  'Save Settings'
-                )}
-              </button>
+              {/* Auto-save status footer indicator */}
+              <div className="flex items-center justify-center py-2">
+                <AutoSaveBadge status={saveStatus} lastSaved={lastSaved} />
+              </div>
             </div>
           )
           }
 
           {
             activeTab === "transcribe" && (
-              <WhisperSettings settings={settings} onUpdateSettings={updateSettings} />
+              <WhisperSettings settings={settings} onUpdateSettings={updateSettings} lastSaved={lastSaved} saveStatus={saveStatus} />
             )
           }
 

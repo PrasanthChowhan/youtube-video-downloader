@@ -8,3 +8,5 @@ export * from "./Icons";
 export { SortableQueueItem } from "./SortableQueueItem";
 export { UpdateTab } from "./UpdateTab";
 export { WhisperSettings } from "./WhisperSettings";
+export { AutoSaveBadge } from "./AutoSaveBadge";
+export type { SaveStatus } from "./AutoSaveBadge";

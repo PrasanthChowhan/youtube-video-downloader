@@ -1,6 +1,6 @@
 [package]
 name = "yt_downloader_tauri"
-version = "2.3.0"
+version = "2.3.1"
 description = "A high-performance YouTube downloader"
 authors = ["you"]
 edition = "2021"
