@@ -810,6 +810,9 @@ pub fn run() {
                 if let Err(e) = binary_downloader::ensure_whisper_cli().await {
                     eprintln!("Failed to ensure whisper-cli is available: {}", e);
                 }
+                if let Err(e) = binary_downloader::ensure_ffmpeg().await {
+                    eprintln!("Failed to ensure ffmpeg is available: {}", e);
+                }
             });
             Ok(())
         })
@@ -1100,8 +1103,6 @@ async fn run_download_task(
     match result {
         Ok((mut rx, child)) => {
             let pid = child.pid();
-
-            let mut child = child;
 
             let mut last_filename: Option<String> = None;
             let mut total_bytes: Option<u64> = None;

@@ -222,7 +222,7 @@ pub async fn transcribe_file(
         return Err(format!("Input file not found: {}", input_path));
     }
 
-    // 0. Ensure whisper-cli is downloaded
+    // 0. Ensure whisper-cli and ffmpeg are downloaded/verified
     let _ = app.emit(
         "whisper-progress",
         WhisperProgress {
@@ -233,6 +233,7 @@ pub async fn transcribe_file(
         },
     );
     binary_downloader::ensure_whisper_cli().await?;
+    let _ = binary_downloader::ensure_ffmpeg().await;
     let whisper_bin = binary_downloader::get_whisper_cli_path()?;
 
     // Search across system directories for the requested model
@@ -271,25 +272,40 @@ pub async fn transcribe_file(
     );
 
     // 1. Extract audio to 16kHz WAV using FFmpeg
-    let ffmpeg_bin = binary_downloader::get_ffmpeg_path()?;
     let temp_wav_path = std::env::temp_dir().join(format!("whisper_tmp_{}.wav", uuid::Uuid::new_v4()));
 
-    let ffmpeg_cmd = tauri_plugin_shell::ShellExt::shell(&app)
-        .command(ffmpeg_bin.to_string_lossy().to_string())
-        .args([
-            "-y",
-            "-i",
-            &input_path,
-            "-ar",
-            "16000",
-            "-ac",
-            "1",
-            "-c:a",
-            "pcm_s16le",
-            &temp_wav_path.to_string_lossy().to_string(),
-        ]);
+    let ffmpeg_args = vec![
+        "-y".to_string(),
+        "-i".to_string(),
+        input_path.clone(),
+        "-ar".to_string(),
+        "16000".to_string(),
+        "-ac".to_string(),
+        "1".to_string(),
+        "-c:a".to_string(),
+        "pcm_s16le".to_string(),
+        temp_wav_path.to_string_lossy().to_string(),
+    ];
 
-    let ffmpeg_output = ffmpeg_cmd.output().await.map_err(|e| format!("Failed to run FFmpeg: {}", e))?;
+    // Multi-strategy FFmpeg invocation:
+    // Strategy 1: Tauri bundled sidecar ("ffmpeg")
+    // Strategy 2: Resolved binary from binary_downloader::get_ffmpeg_path()
+    // Strategy 3: System PATH ("ffmpeg")
+    let ffmpeg_output = match app.shell().sidecar("ffmpeg") {
+        Ok(sidecar_cmd) => {
+            match sidecar_cmd.args(&ffmpeg_args).output().await {
+                Ok(out) => Ok(out),
+                Err(err) => {
+                    eprintln!("[WARN] Tauri FFmpeg sidecar execution failed: {}. Falling back to discovered path...", err);
+                    run_ffmpeg_fallback(&app, &ffmpeg_args).await
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("[WARN] Tauri FFmpeg sidecar command unavailable: {}. Falling back to discovered path...", err);
+            run_ffmpeg_fallback(&app, &ffmpeg_args).await
+        }
+    }.map_err(|e| format!("Failed to run FFmpeg: {}. Please verify FFmpeg is installed or bundled.", e))?;
 
     if !ffmpeg_output.status.success() {
         let stderr = String::from_utf8_lossy(&ffmpeg_output.stderr);
@@ -339,7 +355,7 @@ pub async fn transcribe_file(
     }
 
     // Execute whisper-cli
-    let (mut rx, mut child) = tauri_plugin_shell::ShellExt::shell(&app)
+    let (mut rx, _child) = tauri_plugin_shell::ShellExt::shell(&app)
         .command(whisper_bin.to_string_lossy().to_string())
         .args(args)
         .spawn()
@@ -353,7 +369,7 @@ pub async fn transcribe_file(
     // Monitor stdout/stderr
     while let Some(event) = rx.recv().await {
         match event {
-            CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+            CommandEvent::Stdout(_line) | CommandEvent::Stderr(_line) => {
                 let _ = app_progress.emit(
                     "whisper-progress",
                     WhisperProgress {
@@ -403,4 +419,29 @@ pub async fn transcribe_file(
     );
 
     Ok("Transcription completed successfully".to_string())
+}
+
+/// Fallback executor for FFmpeg if Tauri's sidecar launcher cannot find the binary.
+async fn run_ffmpeg_fallback(
+    app: &AppHandle,
+    args: &[String],
+) -> Result<tauri_plugin_shell::process::Output, String> {
+    if let Ok(ffmpeg_path) = binary_downloader::get_ffmpeg_path() {
+        if ffmpeg_path.exists() {
+            eprintln!("[INFO] Invoking FFmpeg via discovered binary path: {:?}", ffmpeg_path);
+            let cmd = app.shell().command(ffmpeg_path.to_string_lossy().to_string());
+            match cmd.args(args.to_vec()).output().await {
+                Ok(out) => return Ok(out),
+                Err(e) => eprintln!("[WARN] Discovered FFmpeg binary failed ({:?}), trying system PATH...", e),
+            }
+        }
+    }
+
+    eprintln!("[INFO] Invoking FFmpeg via system PATH 'ffmpeg'...");
+    let sys_cmd = app.shell().command("ffmpeg");
+    sys_cmd
+        .args(args.to_vec())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute system ffmpeg: {}", e))
 }

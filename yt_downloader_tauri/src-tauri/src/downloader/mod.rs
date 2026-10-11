@@ -4,14 +4,13 @@ pub mod formats;
 pub mod types;
 pub mod youtube;
 
-pub use formats::{format_bytes, format_eta, format_speed};
+pub use formats::{format_eta, format_speed};
 pub use types::{detect_platform, detect_download_method, DownloadMethod, DownloadProgress, Platform, VideoInfo};
 pub use youtube::clean_youtube_url;
 
 use crate::binary_downloader;
 use std::path::PathBuf;
 use tauri::AppHandle;
-use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 /// Returns the default download directory.
@@ -459,7 +458,7 @@ pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
             };
 
             // Extract filename from 6th field if present
-            let filename = if parts.len() >= 6 {
+            let _filename = if parts.len() >= 6 {
                 let path = parts[5].trim();
                 if !path.is_empty() && path != "NA" && path != "N/A" {
                     Some(path.to_string())

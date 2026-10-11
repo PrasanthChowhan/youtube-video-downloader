@@ -143,43 +143,156 @@ pub async fn ensure_aria2c() -> Result<(), String> {
 }
 
 /// Get the path to ffmpeg binary
-/// In production, this is the bundled sidecar. In dev, it's in the binaries folder.
+/// Searches application bundle, sibling directories, local app data, and system PATH.
 pub fn get_ffmpeg_path() -> Result<PathBuf, String> {
-    let bin_dir = get_binary_dir()?;
-
     #[cfg(target_os = "windows")]
-    let binary_name = "ffmpeg-x86_64-pc-windows-msvc.exe";
+    let candidate_names = ["ffmpeg.exe", "ffmpeg-x86_64-pc-windows-msvc.exe", "ffmpeg"];
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    let binary_name = "ffmpeg-aarch64-apple-darwin";
+    let candidate_names = ["ffmpeg", "ffmpeg-aarch64-apple-darwin"];
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let binary_name = "ffmpeg-x86_64-apple-darwin";
+    let candidate_names = ["ffmpeg", "ffmpeg-x86_64-apple-darwin"];
 
     #[cfg(target_os = "linux")]
-    let binary_name = "ffmpeg-x86_64-unknown-linux-gnu";
+    let candidate_names = ["ffmpeg", "ffmpeg-x86_64-unknown-linux-gnu"];
 
-    let path = bin_dir.join(binary_name);
-    
-    // Also check if it exists in the same directory as the executable (for bundled apps)
-    if !path.exists() {
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                // Check in Resources folder (macOS app bundle)
-                let resources_path = exe_dir.join("../Resources").join(binary_name);
-                if resources_path.exists() {
-                    return Ok(resources_path);
-                }
-                // Check directly next to executable
-                let sibling_path = exe_dir.join(binary_name);
-                if sibling_path.exists() {
-                    return Ok(sibling_path);
+    let mut search_dirs: Vec<PathBuf> = Vec::new();
+
+    // 1. Executable directory and its subdirectories (installed production app)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            search_dirs.push(exe_dir.to_path_buf());
+            search_dirs.push(exe_dir.join("binaries"));
+            search_dirs.push(exe_dir.join("../Resources"));
+            search_dirs.push(exe_dir.join("../Resources/binaries"));
+        }
+    }
+
+    // 2. Local app data directory
+    if let Ok(bin_dir) = get_binary_dir() {
+        search_dirs.push(bin_dir.clone());
+        if let Some(parent) = bin_dir.parent() {
+            search_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Some(local_data) = dirs::data_local_dir() {
+        search_dirs.push(local_data.join("com.prash.ytdownloader").join("binaries"));
+        search_dirs.push(local_data.join("YT Downloader"));
+    }
+
+    // 3. Dev environment (CARGO_MANIFEST_DIR/binaries)
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        search_dirs.push(PathBuf::from(manifest_dir).join("binaries"));
+    }
+
+    // Check all search directories for candidate binary names
+    for dir in &search_dirs {
+        for name in &candidate_names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    // 4. System PATH
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            for name in &candidate_names {
+                let candidate = dir.join(name);
+                if candidate.is_file() {
+                    return Ok(candidate);
                 }
             }
         }
     }
 
-    Ok(path)
+    Err("FFmpeg binary not found in application bundle, local data directory, or system PATH".to_string())
+}
+
+/// Check if ffmpeg is available
+pub fn is_ffmpeg_installed() -> bool {
+    get_ffmpeg_path().is_ok()
+}
+
+#[cfg(target_os = "windows")]
+const FFMPEG_URL: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+
+/// Download and extract ffmpeg binary if missing
+pub async fn download_ffmpeg() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        eprintln!("Downloading FFmpeg fallback...");
+        let bin_dir = get_binary_dir()?;
+        fs::create_dir_all(&bin_dir)
+            .map_err(|e| format!("Failed to create binaries directory: {}", e))?;
+
+        let response = reqwest::get(FFMPEG_URL)
+            .await
+            .map_err(|e| format!("Failed to download FFmpeg: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Failed to download FFmpeg: HTTP {}", response.status()));
+        }
+
+        let zip_bytes = response
+            .bytes()
+            .await
+            .map_err(|e| format!("Failed to read FFmpeg download: {}", e))?;
+
+        extract_ffmpeg_from_zip(&zip_bytes, &bin_dir)?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("FFmpeg auto-download is not available on this platform. Please install FFmpeg via system package manager.".to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn extract_ffmpeg_from_zip(zip_bytes: &[u8], bin_dir: &PathBuf) -> Result<(), String> {
+    use std::io::{Cursor, Read};
+    use zip::ZipArchive;
+
+    let reader = Cursor::new(zip_bytes);
+    let mut archive =
+        ZipArchive::new(reader).map_err(|e| format!("Failed to open FFmpeg ZIP: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
+
+        if file.name().ends_with("ffmpeg.exe") {
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents)
+                .map_err(|e| format!("Failed to read ffmpeg.exe from ZIP: {}", e))?;
+
+            let plain_path = bin_dir.join("ffmpeg.exe");
+            fs::write(&plain_path, &contents)
+                .map_err(|e| format!("Failed to write ffmpeg.exe: {}", e))?;
+
+            let triple_path = bin_dir.join("ffmpeg-x86_64-pc-windows-msvc.exe");
+            let _ = fs::write(&triple_path, &contents);
+
+            eprintln!("FFmpeg downloaded and extracted successfully to {:?}", plain_path);
+            return Ok(());
+        }
+    }
+
+    Err("ffmpeg.exe not found in downloaded ZIP archive".to_string())
+}
+
+/// Ensure ffmpeg is available (download fallback if missing)
+pub async fn ensure_ffmpeg() -> Result<(), String> {
+    if is_ffmpeg_installed() {
+        eprintln!("FFmpeg is already available");
+        Ok(())
+    } else {
+        eprintln!("FFmpeg not found, initiating fallback download...");
+        download_ffmpeg().await
+    }
 }
 
 const WHISPER_CLI_VERSION: &str = "1.6.0";
@@ -193,30 +306,47 @@ pub fn get_whisper_cli_path() -> Result<PathBuf, String> {
     let bin_dir = get_binary_dir()?;
 
     #[cfg(target_os = "windows")]
-    let binary_name = "whisper-cli-x86_64-pc-windows-msvc.exe";
+    let candidate_names = ["whisper-cli-x86_64-pc-windows-msvc.exe", "whisper-cli.exe"];
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    let binary_name = "whisper-cli-aarch64-apple-darwin";
+    let candidate_names = ["whisper-cli-aarch64-apple-darwin", "whisper-cli"];
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let binary_name = "whisper-cli-x86_64-apple-darwin";
+    let candidate_names = ["whisper-cli-x86_64-apple-darwin", "whisper-cli"];
 
     #[cfg(target_os = "linux")]
-    let binary_name = "whisper-cli-x86_64-unknown-linux-gnu";
+    let candidate_names = ["whisper-cli-x86_64-unknown-linux-gnu", "whisper-cli"];
 
-    let path = bin_dir.join(binary_name);
-    if !path.exists() {
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                let sibling_path = exe_dir.join(binary_name);
-                if sibling_path.exists() {
-                    return Ok(sibling_path);
-                }
+    let mut search_dirs: Vec<PathBuf> = Vec::new();
+
+    // 1. Check local app data bin_dir
+    search_dirs.push(bin_dir.clone());
+
+    // 2. Check executable directory
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            search_dirs.push(exe_dir.to_path_buf());
+            search_dirs.push(exe_dir.join("binaries"));
+            search_dirs.push(exe_dir.join("../Resources"));
+        }
+    }
+
+    // 3. Dev environment
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        search_dirs.push(PathBuf::from(manifest_dir).join("binaries"));
+    }
+
+    for dir in &search_dirs {
+        for name in &candidate_names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Ok(candidate);
             }
         }
     }
 
-    Ok(path)
+    // Return target location for fresh downloads
+    Ok(bin_dir.join(candidate_names[0]))
 }
 
 /// Check if whisper CLI is installed (and check for CUDA DLLs on Windows)
@@ -345,6 +475,25 @@ pub async fn ensure_whisper_cli() -> Result<(), String> {
     } else {
         eprintln!("whisper-cli not found, downloading...");
         download_whisper_cli().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ffmpeg_path_resolution() {
+        let ffmpeg_res = get_ffmpeg_path();
+        println!("Resolved ffmpeg path: {:?}", ffmpeg_res);
+        assert!(ffmpeg_res.is_ok(), "Expected FFmpeg to be discovered, got: {:?}", ffmpeg_res);
+        let path = ffmpeg_res.unwrap();
+        assert!(path.exists(), "Discovered path does not exist on disk: {:?}", path);
+    }
+
+    #[test]
+    fn test_is_ffmpeg_installed() {
+        assert!(is_ffmpeg_installed(), "is_ffmpeg_installed() should return true");
     }
 }
 
