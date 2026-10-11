@@ -559,3 +559,34 @@ pub fn parse_progress_line(line: &str) -> Option<DownloadProgress> {
 
     None
 }
+
+/// Silently checks for and applies yt-dlp updates in the background.
+pub async fn update_ytdlp_silently(app: &AppHandle) -> Result<String, String> {
+    eprintln!("[INFO] Checking for yt-dlp updates in the background...");
+
+    let command = app
+        .shell()
+        .sidecar("yt-dlp")
+        .map_err(|e| format!("Failed to create yt-dlp sidecar command: {}", e))?
+        .args(["-U"]);
+
+    let output = command
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute yt-dlp -U: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        eprintln!("[INFO] yt-dlp update check completed:\n{}", stdout.trim());
+        Ok(stdout)
+    } else {
+        eprintln!(
+            "[WARN] yt-dlp update check warning/error: {} | {}",
+            stdout.trim(),
+            stderr.trim()
+        );
+        Err(format!("yt-dlp update failed: {}", stderr))
+    }
+}

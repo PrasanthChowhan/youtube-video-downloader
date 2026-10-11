@@ -512,6 +512,15 @@ async fn open_update_page(url: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Check and update yt-dlp binary in place
+#[tauri::command]
+async fn update_ytdlp(app: AppHandle) -> CommandResponse<String> {
+    match downloader::update_ytdlp_silently(&app).await {
+        Ok(msg) => CommandResponse::ok(msg),
+        Err(err) => CommandResponse::err(err),
+    }
+}
+
 // ============================================================================
 // Download Queue Commands
 // ============================================================================
@@ -802,7 +811,8 @@ pub fn run() {
         .manage(DownloadState::default())
         .manage(DownloadQueue::new())
         .manage(Arc::new(DownloadManager::default()))
-        .setup(|_app| {
+        .setup(|app| {
+            let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = ensure_aria2c_available().await {
                     eprintln!("Failed to ensure aria2c is available: {}", e);
@@ -812,6 +822,10 @@ pub fn run() {
                 }
                 if let Err(e) = binary_downloader::ensure_ffmpeg().await {
                     eprintln!("Failed to ensure ffmpeg is available: {}", e);
+                }
+                // Silently check and update yt-dlp in the background on startup
+                if let Err(e) = downloader::update_ytdlp_silently(&app_handle).await {
+                    eprintln!("[WARN] Background yt-dlp update check failed: {}", e);
                 }
             });
             Ok(())
@@ -851,6 +865,7 @@ pub fn run() {
             // Auto-update commands
             check_for_updates,
             open_update_page,
+            update_ytdlp,
             // Whisper commands
             whisper::get_available_models,
             whisper::download_whisper_model,
